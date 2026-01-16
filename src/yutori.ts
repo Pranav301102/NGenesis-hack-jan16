@@ -42,15 +42,23 @@ export class YutoriMonitor {
     console.log('[Yutori] Creating Scout for:', request.query);
 
     try {
+      // Build request body - only include webhook_url if it's a valid URL
+      const webhookUrl = request.webhook_url || this.webhookUrl;
+      const requestBody: any = {
+        query: request.query,
+        start_timestamp: request.start_timestamp || Math.floor(Date.now() / 1000),
+        output_interval: request.output_interval ? this.parseInterval(request.output_interval) : 3600,
+        skip_email: true  // Skip email notifications for API usage
+      };
+
+      // Only add webhook_url if it's a valid URL (not empty or placeholder)
+      if (webhookUrl && webhookUrl.startsWith('http')) {
+        requestBody.webhook_url = webhookUrl;
+      }
+
       const response = await axios.post(
         `${this.baseUrl}/scouting/tasks`,
-        {
-          query: request.query,
-          start_timestamp: request.start_timestamp || Math.floor(Date.now() / 1000),
-          output_interval: request.output_interval ? this.parseInterval(request.output_interval) : 3600,
-          webhook_url: request.webhook_url || this.webhookUrl,
-          skip_email: true  // Skip email notifications for API usage
-        },
+        requestBody,
         {
           headers: {
             'X-API-Key': this.apiKey,  // FIXED: Use X-API-Key instead of Bearer

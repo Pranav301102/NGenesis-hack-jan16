@@ -17,11 +17,11 @@ export class FreepikGenerator {
     const request: FreepikMysticRequest = {
       prompt: prompt,
       aspect_ratio: 'square_1_1',
-      structure_strength: 40,
-      resolution: '4k'
+      resolution: '2k',
+      model: 'realism'
     };
 
-    // Add style reference if available
+    // Add style reference if available (as base64)
     if (this.styleReferenceUrl) {
       request.style_reference = this.styleReferenceUrl;
     }
@@ -38,8 +38,14 @@ export class FreepikGenerator {
         }
       );
 
-      const taskId = response.data.task_id;
+      // Response structure: { data: { task_id, status, generated } }
+      const taskId = response.data?.data?.task_id;
       console.log('[Freepik] Task created:', taskId);
+
+      if (!taskId) {
+        console.error('[Freepik] No task_id in response:', JSON.stringify(response.data, null, 2));
+        throw new Error('No task_id returned from Freepik API');
+      }
 
       // Poll for completion
       const imageUrl = await this.pollTaskStatus(taskId);
@@ -79,11 +85,20 @@ export class FreepikGenerator {
           }
         );
 
-        const status = response.data.status;
+        // Response structure: { data: { task_id, status, generated, has_nsfw } }
+        const data = response.data?.data;
+        const status = data?.status;
 
-        if (status === 'completed') {
-          return response.data.image_url;
-        } else if (status === 'failed') {
+        console.log('[Freepik] Poll status:', status);
+
+        if (status === 'COMPLETED') {
+          // Images are in the 'generated' array
+          const images = data?.generated;
+          if (images && images.length > 0) {
+            return images[0];
+          }
+          throw new Error('No images in completed response');
+        } else if (status === 'FAILED') {
           throw new Error('Image generation failed');
         }
 
@@ -91,9 +106,12 @@ export class FreepikGenerator {
         await new Promise(resolve => setTimeout(resolve, 2000));
 
       } catch (error: any) {
-        if (i === maxAttempts - 1) {
+        // Only throw on last attempt or if it's a known error
+        if (i === maxAttempts - 1 || error.message.includes('failed')) {
           throw error;
         }
+        // Continue polling on network errors
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
 

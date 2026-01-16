@@ -5,6 +5,8 @@ export interface AgentRequest {
   target_url: string;
   personality?: 'professional' | 'aggressive' | 'friendly';
   agent_name?: string;
+  template_id?: string;
+  output_format?: 'view' | 'json' | 'csv' | 'api';
 }
 
 export interface BuildManifest {
@@ -44,16 +46,23 @@ export interface AgentGenerationStatus {
 
 export interface FreepikMysticRequest {
   prompt: string;
-  aspect_ratio?: 'square_1_1' | 'portrait_3_4' | 'landscape_4_3';
+  aspect_ratio?: 'square_1_1' | 'classic_4_3' | 'traditional_3_4' | 'widescreen_16_9' | 'social_story_9_16';
   style_reference?: string;
+  structure_reference?: string;
   structure_strength?: number;
   resolution?: '1k' | '2k' | '4k';
+  model?: 'realism' | 'fluid' | 'zen' | 'flexible' | 'super_real' | 'editorial_portraits';
+  creative_detailing?: number;
+  webhook_url?: string;
 }
 
 export interface FreepikMysticResponse {
-  task_id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  image_url?: string;
+  data: {
+    task_id: string;
+    status: 'CREATED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+    generated: string[];
+    has_nsfw?: boolean[];
+  };
 }
 
 export interface GeminiPromptContext {

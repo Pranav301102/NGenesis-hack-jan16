@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meta-Genesis Control Panel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🤖 Meta-Genesis Control Panel</h1>
+            <p class="subtitle">Autonomous Agent Factory with 7 Prize Integrations</p>
+            <div class="prize-badges">
+                <span class="badge yutori">Yutori</span>
+                <span class="badge agentql">AgentQL</span>
+                <span class="badge freepik">Freepik</span>
+                <span class="badge cline">Cline</span>
+                <span class="badge fabricate">Fabricate</span>
+                <span class="badge macroscope">Macroscope</span>
+                <span class="badge retool">Retool</span>
+            </div>
+        </header>
+
+        <!-- Stats Dashboard -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-value" id="totalAgents">0</div>
+                <div class="stat-label">Total Agents</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">👁️</div>
+                <div class="stat-value" id="activeMonitoring">0</div>
+                <div class="stat-label">Active Monitors</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-value" id="avgQuality">0</div>
+                <div class="stat-label">Avg Quality Score</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🏆</div>
+                <div class="stat-value" id="prizeCount">0/7</div>
+                <div class="stat-label">Prizes Active</div>
+            </div>
+        </div>
+
+        <!-- Create Agent Form -->
+        <div class="card">
+            <h2>Create New Agent</h2>
+            <form id="createAgentForm">
+                <div class="form-group">
+                    <label for="userIntent">What should the agent do?</label>
+                    <input
+                        type="text"
+                        id="userIntent"
+                        placeholder="e.g., Track iPhone 15 prices on Amazon"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="targetUrl">Target URL</label>
+                    <input
+                        type="url"
+                        id="targetUrl"
+                        placeholder="https://www.amazon.com/s?k=iphone+15"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="agentName">Agent Name (Optional)</label>
+                    <input
+                        type="text"
+                        id="agentName"
+                        placeholder="price_tracker"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="personality">Personality</label>
+                    <select id="personality">
+                        <option value="professional">Professional</option>
+                        <option value="aggressive">Aggressive</option>
+                        <option value="friendly">Friendly</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn-primary">
+                    <span class="btn-icon">🚀</span>
+                    Create Agent
+                </button>
+            </form>
+
+            <div id="creationStatus" class="status-message" style="display: none;"></div>
+        </div>
+
+        <!-- Active Agents List -->
+        <div class="card">
+            <h2>Active Agents</h2>
+            <div id="agentsList" class="agents-list">
+                <p class="empty-state">No agents created yet. Create one above to get started!</p>
+            </div>
+        </div>
+
+        <!-- Selected Agent Timeline -->
+        <div id="timelineSection" class="card" style="display: none;">
+            <h2>Agent Timeline: <span id="selectedAgentId"></span></h2>
+            <div id="timeline" class="timeline"></div>
+        </div>
+
+        <!-- Active Scouts -->
+        <div class="card">
+            <h2>Active Yutori Scouts</h2>
+            <div id="scoutsList" class="scouts-list">
+                <p class="empty-state">No active scouts. Create an agent with monitoring intent to deploy scouts.</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Meta-Genesis v1.0</p>
+        </footer>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(npm run build:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(taskkill:*)",
+      "WebSearch",
+      "WebFetch(domain:yutori.com)",
+      "WebFetch(domain:docs.yutori.com)"
+    ]
+  }
+}

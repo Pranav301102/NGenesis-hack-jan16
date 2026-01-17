@@ -10,24 +10,24 @@ let authToken = null;
 let resultsHistory = [];
 let currentCreationContext = null;
 let availableTools = [];
-let selectedTools = new Set(['gemini', 'tinyfish']); // Default selected tools
+let selectedTools = new Set(['gemini', 'cline', 'tinyfish']); // Default: AI brain + code gen + scraping
 
 // Example tasks for quick start
 const EXAMPLE_TASKS = {
     research: {
         prompt: "Research the latest AI news and trends, summarize the top 5 developments, and generate a professional blog header image for an article about AI innovation",
         url: "https://techcrunch.com/category/artificial-intelligence/",
-        tools: ['gemini', 'tinyfish', 'freepik']
+        tools: ['gemini', 'cline', 'tinyfish', 'freepik']
     },
     monitor: {
         prompt: "Monitor iPhone 15 Pro prices on Amazon, track price changes, and alert me when the price drops below $900",
         url: "https://www.amazon.com/dp/B0CLTM7HD9",
-        tools: ['gemini', 'tinyfish', 'yutori']
+        tools: ['gemini', 'cline', 'tinyfish', 'yutori']
     },
     scrape: {
-        prompt: "Scrape the top 10 product reviews, extract ratings and key feedback, and summarize the overall sentiment",
-        url: "https://www.amazon.com/dp/B0CLTM7HD9",
-        tools: ['gemini', 'tinyfish']
+        prompt: "Scrape the top 10 product reviews for iPhone, extract ratings and key feedback, and summarize the overall sentiment",
+        url: "https://www.amazon.com/Apple-iPhone-15-Pro-256/dp/B0CMT4JLT9",
+        tools: ['gemini', 'cline', 'tinyfish', 'macroscope']
     }
 };
 
@@ -72,12 +72,13 @@ async function loadAvailableTools() {
         console.error('Failed to load tools:', error);
         // Use default tools
         availableTools = [
-            { id: 'gemini', name: 'Gemini 2.5', icon: '🧠', enabled: true, description: 'AI reasoning & planning' },
-            { id: 'tinyfish', name: 'Web Scraping', icon: '🤖', enabled: true, description: 'Extract data from websites' },
-            { id: 'freepik', name: 'Image Generation', icon: '🎨', enabled: true, description: 'Create AI images' },
-            { id: 'yutori', name: 'Continuous Monitoring', icon: '👁️', enabled: true, description: 'Watch for changes' },
-            { id: 'fabricate', name: 'Fabricate', icon: '🧪', enabled: true, description: 'Test data generation' },
-            { id: 'macroscope', name: 'Macroscope', icon: '🔍', enabled: true, description: 'Code review' }
+            { id: 'gemini', name: 'Gemini 2.0 Flash', icon: '🧠', enabled: true, description: 'AI brain - analyzes tasks, plans workflows, synthesizes results' },
+            { id: 'cline', name: 'Cline', icon: '🤖', enabled: true, description: 'Autonomous code generator - writes custom code on-demand' },
+            { id: 'tinyfish', name: 'TinyFish/AgentQL', icon: '🌐', enabled: true, description: 'Self-healing web scraper - extracts data using natural language' },
+            { id: 'freepik', name: 'Freepik Mystic', icon: '🎨', enabled: true, description: 'AI image generator - creates visuals matching your content' },
+            { id: 'yutori', name: 'Yutori Scouts', icon: '👁️', enabled: true, description: 'Continuous monitor - watches websites 24/7 for changes' },
+            { id: 'fabricate', name: 'Tonic Fabricate', icon: '🧪', enabled: true, description: 'Test data generator - creates realistic synthetic datasets' },
+            { id: 'macroscope', name: 'Macroscope', icon: '🔍', enabled: true, description: 'Code reviewer - validates quality and security automatically' }
         ];
         renderToolsGrid();
     }
@@ -104,9 +105,13 @@ function renderToolsGrid() {
 
 function toggleTool(toolId) {
     if (selectedTools.has(toolId)) {
-        // Don't allow deselecting Gemini (required)
+        // Don't allow deselecting core tools
         if (toolId === 'gemini') {
             showToast('⚠️ Gemini is required for orchestration');
+            return;
+        }
+        if (toolId === 'cline') {
+            showToast('⚠️ Cline is required for code generation');
             return;
         }
         selectedTools.delete(toolId);

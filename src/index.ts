@@ -1020,51 +1020,66 @@ app.get('/api/tools', (req: Request, res: Response) => {
     tools: [
       {
         id: 'gemini',
-        name: 'Gemini 2.5',
-        description: 'AI reasoning, planning, and text generation',
+        name: 'Gemini 2.0 Flash',
+        description: 'AI brain - analyzes tasks, plans workflows, synthesizes results',
         icon: '🧠',
         enabled: !!process.env.GEMINI_API_KEY,
-        category: 'ai'
+        category: 'ai',
+        details: 'Task analysis, tool selection, sentiment analysis, quality scoring'
+      },
+      {
+        id: 'cline',
+        name: 'Cline',
+        description: 'Autonomous code generator - writes custom code on-demand',
+        icon: '🤖',
+        enabled: true,
+        category: 'ai',
+        details: 'Generates execution code, task decomposition, workflow design'
       },
       {
         id: 'tinyfish',
-        name: 'Web Scraping',
-        description: 'Extract data from any website',
-        icon: '🤖',
+        name: 'TinyFish/AgentQL',
+        description: 'Self-healing web scraper - extracts data using natural language',
+        icon: '🌐',
         enabled: !!process.env.AGENTQL_API_KEY,
-        category: 'automation'
+        category: 'automation',
+        details: 'Cloud-based scraping, no CSS selectors needed, returns structured JSON'
       },
       {
         id: 'freepik',
-        name: 'Image Generation',
-        description: 'Create AI-generated images',
+        name: 'Freepik Mystic',
+        description: 'AI image generator - creates visuals matching your content',
         icon: '🎨',
         enabled: !!process.env.FREEPIK_API_KEY,
-        category: 'media'
+        category: 'media',
+        details: 'Blog headers, product visuals, illustrations, 4K quality'
       },
       {
         id: 'yutori',
-        name: 'Continuous Monitoring',
-        description: 'Watch websites for changes & alerts',
+        name: 'Yutori Scouts',
+        description: 'Continuous monitor - watches websites 24/7 for changes',
         icon: '👁️',
         enabled: !!process.env.YUTORI_API_KEY,
-        category: 'monitoring'
+        category: 'monitoring',
+        details: 'Price tracking, content updates, webhook alerts, scheduled checks'
       },
       {
         id: 'fabricate',
-        name: 'Fabricate',
-        description: 'Synthetic test data generation',
+        name: 'Tonic Fabricate',
+        description: 'Test data generator - creates realistic synthetic datasets',
         icon: '🧪',
         enabled: !!process.env.FABRICATE_API_KEY,
-        category: 'testing'
+        category: 'testing',
+        details: 'Privacy-safe fake data, multiple formats (JSON, CSV, SQL)'
       },
       {
         id: 'macroscope',
         name: 'Macroscope',
-        description: 'AI code review & quality analysis',
+        description: 'Code reviewer - validates quality and security automatically',
         icon: '🔍',
-        enabled: true, // Always available via local analysis
-        category: 'quality'
+        enabled: true,
+        category: 'quality',
+        details: 'Quality scoring (0-100), security checks, performance analysis'
       }
     ]
   });

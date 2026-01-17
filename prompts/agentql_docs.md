@@ -4,6 +4,18 @@
 
 AgentQL is a natural language query language for web automation. Instead of brittle CSS or XPath selectors, you use semantic descriptions.
 
+## IMPORTANT: API Key Configuration
+
+AgentQL requires an API key. The agent MUST configure it before use:
+
+```python
+import agentql
+import os
+
+# Configure AgentQL API key (reads from environment variable)
+os.environ["AGENTQL_API_KEY"] = os.getenv("AGENTQL_API_KEY", "YOUR_API_KEY_HERE")
+```
+
 ## Core Syntax
 
 ### Query Structure
@@ -28,7 +40,11 @@ query = """
 
 ```python
 import agentql
+import os
 from playwright.sync_api import sync_playwright
+
+# Set API key
+os.environ["AGENTQL_API_KEY"] = os.getenv("AGENTQL_API_KEY", "")
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=False)

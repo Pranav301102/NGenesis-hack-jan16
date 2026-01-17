@@ -1,13 +1,35 @@
-// API Base URL
+// NGenesis App - New Layout
 const API_BASE = window.location.origin;
 
 // State
 let selectedAgentId = null;
 let refreshInterval = null;
-let selectedTemplate = null;
 let templates = [];
 let currentUser = null;
 let authToken = null;
+let resultsHistory = [];
+let currentCreationContext = null;
+let availableTools = [];
+let selectedTools = new Set(['gemini', 'tinyfish']); // Default selected tools
+
+// Example tasks for quick start
+const EXAMPLE_TASKS = {
+    research: {
+        prompt: "Research the latest AI news and trends, summarize the top 5 developments, and generate a professional blog header image for an article about AI innovation",
+        url: "https://techcrunch.com/category/artificial-intelligence/",
+        tools: ['gemini', 'tinyfish', 'freepik']
+    },
+    monitor: {
+        prompt: "Monitor iPhone 15 Pro prices on Amazon, track price changes, and alert me when the price drops below $900",
+        url: "https://www.amazon.com/dp/B0CLTM7HD9",
+        tools: ['gemini', 'tinyfish', 'yutori']
+    },
+    scrape: {
+        prompt: "Scrape the top 10 product reviews, extract ratings and key feedback, and summarize the overall sentiment",
+        url: "https://www.amazon.com/dp/B0CLTM7HD9",
+        tools: ['gemini', 'tinyfish']
+    }
+};
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -27,20 +49,102 @@ async function initializeApp() {
         updateUserUI();
     }
 
-    // Load templates
-    await loadTemplates();
+    // Load available tools
+    await loadAvailableTools();
 
-    // Load initial data
-    await loadPrizeStats();
+    // Load agents and scouts
     await loadAgents();
     await loadScouts();
-
-    // Setup form handler
-    document.getElementById('createAgentForm').addEventListener('submit', handleCreateAgent);
 
     // Start auto-refresh
     startAutoRefresh();
 }
+
+// ==================== TOOLS ====================
+
+async function loadAvailableTools() {
+    try {
+        const response = await fetch(`${API_BASE}/api/tools`);
+        const data = await response.json();
+        availableTools = data.tools || [];
+        renderToolsGrid();
+    } catch (error) {
+        console.error('Failed to load tools:', error);
+        // Use default tools
+        availableTools = [
+            { id: 'gemini', name: 'Gemini 2.5', icon: '🧠', enabled: true, description: 'AI reasoning & planning' },
+            { id: 'tinyfish', name: 'Web Scraping', icon: '🤖', enabled: true, description: 'Extract data from websites' },
+            { id: 'freepik', name: 'Image Generation', icon: '🎨', enabled: true, description: 'Create AI images' },
+            { id: 'yutori', name: 'Continuous Monitoring', icon: '👁️', enabled: true, description: 'Watch for changes' },
+            { id: 'fabricate', name: 'Fabricate', icon: '🧪', enabled: true, description: 'Test data generation' },
+            { id: 'macroscope', name: 'Macroscope', icon: '🔍', enabled: true, description: 'Code review' }
+        ];
+        renderToolsGrid();
+    }
+}
+
+function renderToolsGrid() {
+    const grid = document.getElementById('toolsGrid');
+    if (!grid) return;
+    
+    grid.innerHTML = availableTools.map(tool => `
+        <div class="tool-card ${selectedTools.has(tool.id) ? 'selected' : ''} ${tool.enabled ? '' : 'unavailable'}" 
+             data-tool="${tool.id}"
+             onclick="toggleTool('${tool.id}')">
+            <div class="tool-icon">${tool.icon}</div>
+            <div class="tool-info">
+                <div class="tool-name">${tool.name}</div>
+                <div class="tool-desc">${tool.description}</div>
+            </div>
+            <div class="tool-checkbox">${selectedTools.has(tool.id) ? '☑' : '☐'}</div>
+            <div class="tool-usage" id="${tool.id}-usage"></div>
+        </div>
+    `).join('');
+}
+
+function toggleTool(toolId) {
+    if (selectedTools.has(toolId)) {
+        // Don't allow deselecting Gemini (required)
+        if (toolId === 'gemini') {
+            showToast('⚠️ Gemini is required for orchestration');
+            return;
+        }
+        selectedTools.delete(toolId);
+    } else {
+        selectedTools.add(toolId);
+    }
+    renderToolsGrid();
+    showToast(`${selectedTools.has(toolId) ? '✓' : '✗'} ${toolId} ${selectedTools.has(toolId) ? 'enabled' : 'disabled'}`);
+}
+
+function getSelectedToolsList() {
+    return Array.from(selectedTools).map(id => {
+        const tool = availableTools.find(t => t.id === id);
+        return tool ? { name: tool.id, displayName: tool.name, icon: tool.icon } : null;
+    }).filter(Boolean);
+}
+
+window.toggleTool = toggleTool;
+
+// ==================== EXAMPLE TASKS ====================
+
+function setExampleTask(type) {
+    const example = EXAMPLE_TASKS[type];
+    if (example) {
+        document.getElementById('mainPrompt').value = example.prompt;
+        document.getElementById('targetUrl').value = example.url;
+        document.getElementById('mainPrompt').focus();
+        
+        // Auto-select the tools for this example
+        if (example.tools) {
+            selectedTools = new Set(example.tools);
+            renderToolsGrid();
+            showToast(`✅ Auto-selected tools: ${example.tools.join(', ')}`);
+        }
+    }
+}
+
+window.setExampleTask = setExampleTask;
 
 // ==================== AUTHENTICATION ====================
 
@@ -51,7 +155,6 @@ function showAuthModal(mode = 'login') {
 
 function closeAuthModal() {
     document.getElementById('authModal').style.display = 'none';
-    // Clear form errors
     document.getElementById('loginError').style.display = 'none';
     document.getElementById('registerError').style.display = 'none';
 }
@@ -85,16 +188,11 @@ async function handleLogin(event) {
         if (result.success) {
             authToken = result.token;
             currentUser = result.user;
-            
-            // Store in localStorage
             localStorage.setItem('ngenesis_token', authToken);
             localStorage.setItem('ngenesis_user', JSON.stringify(currentUser));
-            
             updateUserUI();
             closeAuthModal();
             showToast(`👋 Welcome back, ${currentUser.name || currentUser.email}!`);
-            
-            // Reload agents for this user
             await loadAgents();
         } else {
             errorEl.textContent = result.error || 'Login failed';
@@ -126,11 +224,8 @@ async function handleRegister(event) {
         if (result.success) {
             authToken = result.token;
             currentUser = result.user;
-            
-            // Store in localStorage
             localStorage.setItem('ngenesis_token', authToken);
             localStorage.setItem('ngenesis_user', JSON.stringify(currentUser));
-            
             updateUserUI();
             closeAuthModal();
             showToast(`🎉 Welcome to NGenesis, ${currentUser.name || currentUser.email}!`);
@@ -150,15 +245,15 @@ function updateUserUI() {
     if (currentUser) {
         userSection.innerHTML = `
             <div class="user-info">
-                <span class="user-avatar">${(currentUser.name || currentUser.email).charAt(0).toUpperCase()}</span>
+                <div class="user-avatar">${(currentUser.name || currentUser.email).charAt(0).toUpperCase()}</div>
                 <span class="user-name">${currentUser.name || currentUser.email}</span>
-                <button class="btn-header" onclick="logout()">Logout</button>
             </div>
+            <button class="btn-nav" onclick="logout()">Logout</button>
         `;
     } else {
         userSection.innerHTML = `
-            <button id="loginBtn" class="btn-header" onclick="showAuthModal('login')">Login</button>
-            <button id="registerBtn" class="btn-header-primary" onclick="showAuthModal('register')">Sign Up</button>
+            <button class="btn-nav" onclick="showAuthModal('login')">Login</button>
+            <button class="btn-nav-primary" onclick="showAuthModal('register')">Sign Up</button>
         `;
     }
 }
@@ -173,7 +268,6 @@ function logout() {
     loadAgents();
 }
 
-// Get auth headers for API calls
 function getAuthHeaders() {
     const headers = { 'Content-Type': 'application/json' };
     if (authToken) {
@@ -190,18 +284,215 @@ window.handleLogin = handleLogin;
 window.handleRegister = handleRegister;
 window.logout = logout;
 
-// Template System
+// ==================== TOOL ORCHESTRATION ====================
+
+function updateToolsDisplay(toolsUsed) {
+    // Reset all tools
+    document.querySelectorAll('.tool-card').forEach(card => {
+        card.classList.remove('active');
+    });
+    
+    // Activate used tools
+    if (toolsUsed) {
+        toolsUsed.forEach(tool => {
+            const card = document.querySelector(`.tool-card[data-tool="${tool.name}"]`);
+            if (card) {
+                card.classList.add('active');
+                const usageEl = card.querySelector('.tool-usage');
+                if (usageEl && tool.usage) {
+                    usageEl.textContent = tool.usage;
+                }
+            }
+        });
+    }
+}
+
+function resetToolsDisplay() {
+    document.querySelectorAll('.tool-card').forEach(card => {
+        card.classList.remove('active');
+    });
+}
+
+// ==================== PROMPT-BASED AGENT CREATION ====================
+
+async function createAgentFromPrompt() {
+    const prompt = document.getElementById('mainPrompt').value.trim();
+    const targetUrl = document.getElementById('targetUrl').value.trim();
+    
+    if (!prompt) {
+        showToast('⚠️ Please describe your task');
+        return;
+    }
+    
+    if (selectedTools.size === 0) {
+        showToast('⚠️ Please select at least one tool');
+        return;
+    }
+    
+    const createBtn = document.getElementById('createAgentBtn');
+    const originalText = createBtn.textContent;
+    
+    // Get output type
+    const outputType = document.querySelector('input[name="outputType"]:checked')?.value || 'text';
+    
+    // Get selected tools list
+    const toolsList = getSelectedToolsList();
+    
+    // Store context for approval
+    currentCreationContext = {
+        userIntent: prompt,
+        targetUrl,
+        outputType,
+        selectedTools: toolsList
+    };
+    
+    // Show loading
+    createBtn.disabled = true;
+    createBtn.textContent = '⏳ Analyzing...';
+    
+    // Clear previous output and reset
+    clearOutput();
+    resetPipeline();
+    resetToolsDisplay();
+    
+    // Update pipeline to show progress
+    updatePipeline('plan', 'active');
+    appendOutput('🧠 Analyzing your task...\n');
+    appendOutput(`Task: ${prompt}\n`);
+    if (targetUrl) {
+        appendOutput(`Target: ${targetUrl}\n`);
+    }
+    appendOutput('\n🛠️ Selected Tools: ' + toolsList.map(t => `${t.icon} ${t.displayName}`).join(', ') + '\n');
+    appendOutput('\n⏳ Creating orchestration plan with selected tools...\n\n');
+    
+    try {
+        // Step 1: Generate orchestration plan with selected tools
+        const planResponse = await fetch(`${API_BASE}/genesis/orchestrate`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                user_intent: prompt,
+                target_url: targetUrl,
+                output_format: outputType,
+                selected_tools: Array.from(selectedTools)
+            })
+        });
+        
+        const planResult = await planResponse.json();
+        
+        if (planResponse.ok && planResult.plan) {
+            updatePipeline('plan', 'completed');
+            
+            // Update tools display based on what user selected
+            if (toolsList.length > 0) {
+                updateToolsDisplay(toolsList.map(t => ({ name: t.name, usage: 'Selected by user' })));
+            }
+            
+            // Show the plan
+            appendOutput('\n📋 ORCHESTRATION PLAN:\n');
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            // Show tools being used
+            appendOutput('🛠️ TOOLS SELECTED:\n');
+            toolsList.forEach(tool => {
+                appendOutput(`  • ${tool.icon} ${tool.displayName}\n`);
+            });
+            appendOutput('\n');
+            
+            // Format and show the plan
+            const formattedPlan = formatPlanOutput(planResult.plan);
+            appendOutput(formattedPlan + '\n\n');
+            
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            // Show approval buttons
+            const approvalDiv = document.createElement('div');
+            approvalDiv.className = 'approval-buttons';
+            approvalDiv.style.cssText = 'display: flex; gap: 10px; margin: 15px 0;';
+            approvalDiv.innerHTML = `
+                <button onclick="approveAndExecute()" style="
+                    padding: 12px 24px;
+                    background: #22c55e;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                ">✅ Approve & Execute</button>
+                <button onclick="modifyPlan()" style="
+                    padding: 12px 24px;
+                    background: #f59e0b;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                ">✏️ Modify</button>
+                <button onclick="cancelCreation()" style="
+                    padding: 12px 24px;
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-weight: 600;
+                    font-size: 0.95rem;
+                ">❌ Cancel</button>
+            `;
+            
+            const outputContainer = document.getElementById('outputContainer');
+            outputContainer.appendChild(approvalDiv);
+            
+            // Store the plan in context
+            currentCreationContext.plan = planResult.plan;
+            currentCreationContext.tools_used = planResult.tools_used;
+            
+            // Re-enable create button
+            createBtn.disabled = false;
+            createBtn.textContent = originalText;
+            
+        } else {
+            throw new Error(planResult.error || 'Failed to generate plan');
+        }
+    } catch (error) {
+        const activeStep = document.querySelector('.pipeline-step.active');
+        if (activeStep) {
+            const step = activeStep.getAttribute('data-step');
+            if (step) updatePipeline(step, 'failed');
+        }
+        
+        appendOutput(`\n❌ Error: ${error.message}\n`);
+        showToast(`❌ ${error.message}`);
+        
+        createBtn.disabled = false;
+        createBtn.textContent = originalText;
+    }
+}
+
+function getToolEmoji(toolName) {
+    const emojis = {
+        'gemini': '🧠',
+        'agentql': '🤖',
+        'freepik': '🎨',
+        'yutori': '👁️'
+    };
+    return emojis[toolName.toLowerCase()] || '🔧';
+}
+
+window.createAgentFromPrompt = createAgentFromPrompt;
+
 async function loadTemplates() {
     try {
         const response = await fetch(`${API_BASE}/api/templates`);
         templates = await response.json();
-        renderTemplateGallery();
     } catch (error) {
         console.error('Error loading templates:', error);
-        // Fallback to built-in templates
         templates = getBuiltInTemplates();
-        renderTemplateGallery();
     }
+    
+    renderTemplateSelect();
 }
 
 function getBuiltInTemplates() {
@@ -209,491 +500,999 @@ function getBuiltInTemplates() {
         {
             id: 'price-monitor',
             name: 'Price Monitor',
-            description: 'Track product prices and get alerts on changes',
             icon: '💰',
-            category: 'monitoring',
-            requiredPlugins: ['agentql', 'yutori'],
-            defaultIntent: 'Monitor {product} prices on {website} and alert on drops',
             placeholders: {
                 product: 'Product name (e.g., iPhone 15)',
-                website: 'Website URL',
-                customization: 'Alert conditions (optional)'
+                website: 'Website URL'
             },
-            examples: ['iPhone on Amazon', 'Tesla stock', 'GPU prices on Newegg']
+            defaultIntent: 'Monitor {product} prices on {website} and alert on price drops'
         },
         {
             id: 'news-tracker',
             name: 'News Tracker',
-            description: 'Monitor news sites for specific topics',
             icon: '📰',
-            category: 'monitoring',
-            requiredPlugins: ['agentql', 'yutori'],
-            defaultIntent: 'Track news about {topic} on {website}',
             placeholders: {
                 topic: 'News topic (e.g., AI, Climate)',
                 website: 'News website URL'
             },
-            examples: ['AI releases on TechCrunch', 'Climate news on BBC']
+            defaultIntent: 'Track news about {topic} on {website}'
         },
         {
             id: 'data-scraper',
             name: 'Data Scraper',
-            description: 'Extract data from websites into structured format',
             icon: '🔍',
-            category: 'scraping',
-            requiredPlugins: ['agentql'],
-            defaultIntent: 'Extract {data_type} from {website}',
             placeholders: {
                 data_type: 'Type of data (e.g., Product listings)',
-                website: 'Target website URL'
+                website: 'Target URL'
             },
-            examples: ['Product listings', 'Job postings', 'Real estate data']
+            defaultIntent: 'Extract {data_type} from {website}'
         },
         {
             id: 'content-aggregator',
             name: 'Content Aggregator',
-            description: 'Gather content from multiple sources',
             icon: '📚',
-            category: 'research',
-            requiredPlugins: ['agentql'],
-            defaultIntent: 'Collect {content_type} from {website} and other sources like {sources}',
             placeholders: {
                 content_type: 'Content type (e.g., Blog posts)',
-                sources: 'Other sources (optional)',
-                website: 'Primary Website URL'
+                website: 'Primary source URL'
             },
-            examples: ['Blog posts on AI', 'Research papers', 'Social media posts']
-        },
-        {
-            id: 'form-filler',
-            name: 'Form Automation',
-            description: 'Automatically fill out web forms',
-            icon: '📝',
-            category: 'automation',
-            requiredPlugins: ['agentql'],
-            defaultIntent: 'Fill {form_type} on {website} with provided data',
-            placeholders: {
-                form_type: 'Form type (e.g., Survey)',
-                website: 'Website with the form'
-            },
-            examples: ['Survey submissions', 'Application forms']
+            defaultIntent: 'Collect {content_type} from {website} and similar sources'
         },
         {
             id: 'custom-agent',
             name: 'Custom Agent',
-            description: 'Build your own agent from scratch',
             icon: '🛠️',
-            category: 'automation',
-            requiredPlugins: ['agentql'],
-            defaultIntent: '{custom_intent}',
             placeholders: {
                 custom_intent: 'Describe what your agent should do',
                 website: 'Target website URL'
             },
-            examples: []
+            defaultIntent: '{custom_intent} on {website}'
         }
     ];
 }
 
-function renderTemplateGallery() {
-    const gallery = document.getElementById('templateGallery');
-    gallery.innerHTML = templates.map(template => `
-        <div class="template-card" onclick="selectTemplate('${template.id}')">
-            <div class="template-icon">${template.icon}</div>
-            <div class="template-name">${template.name}</div>
-            <div class="template-description">${template.description}</div>
-            <div class="template-category">${template.category}</div>
-            ${template.examples.length > 0 ? `<div class="template-examples">e.g., ${template.examples[0]}</div>` : ''}
-        </div>
-    `).join('');
+function renderTemplateSelect() {
+    const select = document.getElementById('templateSelect');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="">Select a template...</option>' + templates.map(t => 
+        `<option value="${t.id}">${t.icon} ${t.name}</option>`
+    ).join('');
+    
+    // Don't render inputs until user selects
+    const container = document.getElementById('dynamicInputs');
+    container.innerHTML = '<input type="text" placeholder="Select a template to begin..." disabled>';
+    
+    // Disable create button initially
+    const createBtn = document.getElementById('createAgentBtn');
+    if (createBtn) createBtn.disabled = true;
 }
 
-function selectTemplate(templateId) {
-    selectedTemplate = templates.find(t => t.id === templateId);
-    if (!selectedTemplate) return;
-
-    // Hide gallery, show config
-    const galleryCard = document.querySelector('.template-grid');
-    if (galleryCard && galleryCard.closest('.card')) {
-        galleryCard.closest('.card').style.display = 'none';
+function onTemplateChange() {
+    const templateId = document.getElementById('templateSelect').value;
+    const template = templates.find(t => t.id === templateId);
+    
+    const container = document.getElementById('dynamicInputs');
+    const createBtn = document.getElementById('createAgentBtn');
+    
+    if (!template || !templateId) {
+        container.innerHTML = '<input type="text" placeholder="Select a template to begin..." disabled>';
+        if (createBtn) createBtn.disabled = true;
+        return;
     }
     
-    const configEl = document.getElementById('templateConfig');
-    if (configEl) {
-        configEl.style.display = 'block';
+    // Support both 'inputs' array (fallback) and 'placeholders' object (API)
+    let inputsHtml = '';
+    
+    if (template.inputs && Array.isArray(template.inputs)) {
+        // Fallback structure
+        inputsHtml = template.inputs.map(input => `
+            <input 
+                type="${input.type || 'text'}" 
+                id="input_${input.key}"
+                placeholder="${input.placeholder || input.label}"
+                data-key="${input.key}"
+                required
+            >
+        `).join('');
+    } else if (template.placeholders) {
+        // API structure from src/templates.ts
+        inputsHtml = Object.entries(template.placeholders).map(([key, label]) => {
+            const isUrl = key.toLowerCase().includes('website') || key.toLowerCase().includes('url');
+            return `
+                <input 
+                    type="${isUrl ? 'url' : 'text'}" 
+                    id="input_${key}"
+                    placeholder="${label}"
+                    data-key="${key}"
+                    required
+                >
+            `;
+        }).join('');
     }
-
-    // Show selected template info
-    const infoEl = document.getElementById('selectedTemplateInfo');
-    if (infoEl) {
-        infoEl.innerHTML = `
-            <h3>${selectedTemplate.icon} ${selectedTemplate.name}</h3>
-            <p>${selectedTemplate.description}</p>
-        `;
-    }
-
-    // Generate dynamic fields
-    const fieldsEl = document.getElementById('dynamicFields');
-    if (fieldsEl) {
-        fieldsEl.innerHTML = Object.entries(selectedTemplate.placeholders)
-            .map(([key, label]) => {
-                // Determine input type based on field name
-                const isUrl = key.toLowerCase().includes('website') || 
-                              key.toLowerCase().includes('url') || 
-                              label.toLowerCase().includes('url');
-                
-                // Determine if field is required (not optional fields)
-                const isOptional = key.toLowerCase().includes('customization') || 
-                                  key.toLowerCase().includes('optional') ||
-                                  label.toLowerCase().includes('optional');
-                
-                return `
-                    <div class="form-group">
-                        <label for="field_${key}">${label}</label>
-                        <input
-                            type="${isUrl ? 'url' : 'text'}"
-                            id="field_${key}"
-                            placeholder="${label}"
-                            ${!isOptional ? 'required' : ''}
-                        >
-                    </div>
-                `;
-            }).join('');
+    
+    container.innerHTML = inputsHtml;
+    
+    // Enable create button
+    if (createBtn) createBtn.disabled = false;
+    
+    // Focus first input
+    const firstInput = container.querySelector('input');
+    if (firstInput) {
+        firstInput.focus();
     }
 }
 
-function backToGallery() {
-    const configEl = document.getElementById('templateConfig');
-    if (configEl) {
-        configEl.style.display = 'none';
+window.onTemplateChange = onTemplateChange;
+
+// ==================== LEGACY AGENT CREATION (Template-based) ====================
+
+async function createAgent() {
+    const templateId = document.getElementById('templateSelect')?.value;
+    if (!templateId) {
+        // Redirect to new prompt-based flow
+        createAgentFromPrompt();
+        return;
+    }
+    const template = templates.find(t => t.id === templateId);
+    
+    if (!template) {
+        showToast('⚠️ Please select a template first');
+        return;
     }
     
-    const galleryCard = document.querySelector('.template-grid');
-    if (galleryCard && galleryCard.closest('.card')) {
-        galleryCard.closest('.card').style.display = 'block';
-    }
+    const createBtn = document.querySelector('.btn-create');
+    const originalText = createBtn.textContent;
     
-    selectedTemplate = null;
-}
-
-// Make functions globally accessible for onclick handlers
-window.selectTemplate = selectTemplate;
-window.backToGallery = backToGallery;
-
-
-// Create Agent
-async function handleCreateAgent(e) {
-    e.preventDefault();
-
-    const statusEl = document.getElementById('creationStatus');
-    const submitBtn = e.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-
-    // Show loading
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="loading"></span> Creating...';
-    statusEl.style.display = 'none';
-
-    // Build agent request from template
-    let userIntent, targetUrl;
+    // Collect input values
+    const values = {};
+    let hasEmptyFields = false;
     
-    if (selectedTemplate) {
-        // Template-based creation
-        const fieldValues = {};
-        Object.keys(selectedTemplate.placeholders).forEach(key => {
-            const input = document.getElementById(`field_${key}`);
-            if (input) {
-                fieldValues[key] = input.value;
+    // Get keys from either 'inputs' array or 'placeholders' object
+    const inputKeys = template.inputs 
+        ? template.inputs.map(i => i.key) 
+        : Object.keys(template.placeholders || {});
+    
+    inputKeys.forEach(key => {
+        const el = document.getElementById(`input_${key}`);
+        if (el) {
+            values[key] = el.value;
+            if (!el.value.trim() && !el.placeholder.toLowerCase().includes('optional')) {
+                hasEmptyFields = true;
             }
-        });
-
-        // Fill template intent with values
-        userIntent = selectedTemplate.defaultIntent;
-        Object.entries(fieldValues).forEach(([key, value]) => {
-            userIntent = userIntent.replace(`{${key}}`, value);
-        });
-
-        // Find the URL field (check for website, url, or any field that looks like a URL)
-        targetUrl = fieldValues.website || 
-                    fieldValues.url || 
-                    fieldValues.target_url ||
-                    Object.values(fieldValues).find(val => 
-                        typeof val === 'string' && 
-                        (val.startsWith('http://') || val.startsWith('https://'))
-                    ) || 
-                    '';
-    } else {
-        // Legacy direct creation (fallback)
-        userIntent = document.getElementById('userIntent')?.value || '';
-        targetUrl = document.getElementById('targetUrl')?.value || '';
+        }
+    });
+    
+    if (hasEmptyFields) {
+        showToast('⚠️ Please fill in all required fields');
+        return;
     }
-
-    // Get selected output format
-    const outputFormat = document.querySelector('input[name="outputFormat"]:checked')?.value || 'view';
-
-    const data = {
-        user_intent: userIntent,
-        target_url: targetUrl,
-        agent_name: document.getElementById('agentName').value || undefined,
-        template_id: selectedTemplate?.id,
-        output_format: outputFormat,
-        personality: 'professional'
+    
+    // Build intent from template (handle both defaultIntent and intentTemplate naming)
+    let userIntent = template.defaultIntent || template.intentTemplate;
+    Object.entries(values).forEach(([key, value]) => {
+        userIntent = userIntent.replace(`{${key}}`, value);
+    });
+    
+    // Get target URL
+    const targetUrl = values.website || values.url || '';
+    
+    // Get output type
+    const outputType = document.querySelector('input[name="outputType"]:checked')?.value || 'text';
+    
+    // Store context for approval
+    currentCreationContext = {
+        template,
+        templateId,
+        userIntent,
+        targetUrl,
+        outputType,
+        values
     };
+    
+    // Show loading
+    createBtn.disabled = true;
+    createBtn.textContent = 'Generating Plan...';
+    
+    // Clear previous output and reset pipeline
+    clearOutput();
+    resetPipeline();
+    
+    // Update pipeline to show progress
+    updatePipeline('plan', 'active');
+    appendOutput('🚀 Analyzing your request...\n');
+    appendOutput(`Template: ${template.name}\n`);
+    appendOutput(`Intent: ${userIntent}\n`);
+    appendOutput(`Target: ${targetUrl}\n\n`);
+    appendOutput('⏳ Generating execution plan...\n\n');
+    
+    try {
+        // Step 1: Generate plan first
+        const planResponse = await fetch(`${API_BASE}/genesis/plan`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                user_intent: userIntent,
+                target_url: targetUrl
+            })
+        });
+        
+        const planResult = await planResponse.json();
+        
+        if (planResponse.ok && planResult.plan) {
+            updatePipeline('plan', 'completed');
+            
+            // Show the plan with formatted styling
+            appendOutput('\n📋 EXECUTION PLAN:\n');
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            // Format the plan text (convert markdown-style formatting to readable output)
+            const formattedPlan = formatPlanOutput(planResult.plan);
+            appendOutput(formattedPlan + '\n\n');
+            
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            // Show approval buttons
+            appendOutput('\n');
+            const approvalDiv = document.createElement('div');
+            approvalDiv.style.cssText = 'display: flex; gap: 10px; margin: 15px 0;';
+            approvalDiv.innerHTML = `
+                <button onclick="approveAndExecute()" style="
+                    padding: 10px 20px;
+                    background: #22c55e;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">✅ Approve & Execute</button>
+                <button onclick="modifyPlan()" style="
+                    padding: 10px 20px;
+                    background: #f59e0b;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">✏️ Modify Plan</button>
+                <button onclick="cancelCreation()" style="
+                    padding: 10px 20px;
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">❌ Cancel</button>
+            `;
+            
+            const outputContainer = document.getElementById('outputContainer');
+            outputContainer.appendChild(approvalDiv);
+            
+            // Store the plan in context
+            currentCreationContext.plan = planResult.plan;
+            
+            // Re-enable create button for future use
+            createBtn.disabled = false;
+            createBtn.textContent = originalText;
+            
+        } else {
+            throw new Error(planResult.error || 'Failed to generate plan');
+        }
+    } catch (error) {
+        // Find which step was active and mark it as failed
+        const activeStep = document.querySelector('.pipeline-step.active');
+        if (activeStep) {
+            const step = activeStep.getAttribute('data-step');
+            if (step) updatePipeline(step, 'failed');
+        }
+        
+        appendOutput(`\n❌ Error: ${error.message}\n`);
+        showToast(`❌ ${error.message}`);
+        
+        createBtn.disabled = false;
+        createBtn.textContent = originalText;
+    }
+}
 
+async function approveAndExecute() {
+    if (!currentCreationContext) return;
+    
+    const { userIntent, targetUrl, outputType, tools_used } = currentCreationContext;
+    
+    // Remove approval buttons
+    const approvalBtns = document.querySelector('.approval-buttons');
+    if (approvalBtns) approvalBtns.remove();
+    
+    appendOutput('\n\n✅ Plan approved! Starting orchestration...\n\n');
+    
+    updatePipeline('generate', 'active');
+    
     try {
         const response = await fetch(`${API_BASE}/genesis`, {
             method: 'POST',
             headers: getAuthHeaders(),
-            body: JSON.stringify(data)
+            body: JSON.stringify({
+                user_intent: userIntent,
+                target_url: targetUrl,
+                output_format: outputType,
+                personality: 'professional'
+            })
         });
-
+        
         const result = await response.json();
-
+        
         if (response.ok) {
-            statusEl.className = 'status-message success';
-            statusEl.textContent = `✅ Agent created successfully! ID: ${result.agent_id}`;
-            statusEl.style.display = 'block';
-
-            // Show workflow visualization
-            if (window.workflowViz) {
-                window.workflowViz.show(result.agent_id);
+            // Show realistic progress based on tools used
+            const toolNames = (tools_used || []).map(t => t.name.toLowerCase());
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            appendOutput('🧠 Gemini: Planning execution...\n');
+            updatePipeline('generate', 'completed');
+            updatePipeline('test', 'active');
+            
+            if (toolNames.includes('agentql')) {
+                await new Promise(resolve => setTimeout(resolve, 800));
+                appendOutput('🤖 AgentQL: Initializing browser automation...\n');
             }
-
-            // Reset form
-            e.target.reset();
-
-            // Refresh lists
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            appendOutput('🧪 Testing agent logic...\n');
+            updatePipeline('test', 'completed');
+            updatePipeline('review', 'active');
+            
+            if (toolNames.includes('freepik')) {
+                await new Promise(resolve => setTimeout(resolve, 600));
+                appendOutput('🎨 Freepik: Generating image...\n');
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            appendOutput('✨ Reviewing quality...\n');
+            updatePipeline('review', 'completed');
+            updatePipeline('deploy', 'active');
+            
+            if (toolNames.includes('yutori')) {
+                await new Promise(resolve => setTimeout(resolve, 600));
+                appendOutput('👁️ Yutori: Setting up monitoring scout...\n');
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            appendOutput('🚀 Deploying agent...\n\n');
+            updatePipeline('deploy', 'completed');
+            
+            appendOutput('═'.repeat(60) + '\n');
+            appendOutput(`✅ AGENT CREATED SUCCESSFULLY!\n`);
+            appendOutput(`Agent ID: ${result.agent_id}\n`);
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            appendOutput('📌 Your agent is now ready. Select it from the sidebar to run.\n');
+            
+            showToast('✅ Agent created successfully!');
+            
+            // Clear inputs
+            document.getElementById('mainPrompt').value = '';
+            document.getElementById('targetUrl').value = '';
+            
+            // Re-enable create button
+            const createBtn = document.getElementById('createAgentBtn');
+            createBtn.disabled = false;
+            createBtn.textContent = '🚀 Orchestrate';
+            
+            // Refresh agent list and scouts
             await loadAgents();
-            await loadPrizeStats();
-
-            // Auto-select the new agent
-            setTimeout(() => {
-                selectAgent(result.agent_id);
-            }, 1000);
+            await loadScouts();
+            selectedAgentId = result.agent_id;
+            
+            currentCreationContext = null;
+            
         } else {
             throw new Error(result.error || 'Failed to create agent');
         }
     } catch (error) {
-        statusEl.className = 'status-message error';
-        statusEl.textContent = `❌ Error: ${error.message}`;
-        statusEl.style.display = 'block';
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
+        const activeStep = document.querySelector('.pipeline-step.active');
+        if (activeStep) {
+            const step = activeStep.getAttribute('data-step');
+            if (step) updatePipeline(step, 'failed');
+        }
+        appendOutput(`\n❌ Error: ${error.message}\n`);
+        showToast(`❌ ${error.message}`);
     }
 }
 
-// Load Prize Stats
-async function loadPrizeStats() {
-    try {
-        const response = await fetch(`${API_BASE}/prize-stats`);
-        const stats = await response.json();
-
-        document.getElementById('totalAgents').textContent = stats.total_agents;
-        document.getElementById('activeMonitoring').textContent = stats.active_monitoring;
+function modifyPlan() {
+    if (!currentCreationContext) return;
+    
+    const newIntent = prompt('Modify your task description:', currentCreationContext.userIntent);
+    if (newIntent && newIntent !== currentCreationContext.userIntent) {
+        // Update the prompt input
+        document.getElementById('mainPrompt').value = newIntent;
         
-        // Show agent reliability (quality score)
-        const reliability = stats.average_quality_score;
-        document.getElementById('avgQuality').textContent = reliability;
-
-        // Calculate success rate
-        const successRate = stats.total_agents > 0 
-            ? Math.round((stats.completed_agents / stats.total_agents) * 100) 
-            : 0;
-        document.getElementById('successRate').textContent = `${successRate}%`;
-    } catch (error) {
-        console.error('Failed to load stats:', error);
+        // Trigger re-creation
+        currentCreationContext = null;
+        createAgentFromPrompt();
     }
 }
 
-// Load Agents
+function cancelCreation() {
+    appendOutput('\n❌ Orchestration cancelled.\n');
+    const createBtn = document.getElementById('createAgentBtn');
+    createBtn.disabled = false;
+    createBtn.textContent = '🚀 Orchestrate';
+    resetPipeline();
+    resetToolsDisplay();
+    currentCreationContext = null;
+}
+
+async function regeneratePlan(newIntent) {
+    const { targetUrl } = currentCreationContext;
+    
+    updatePipeline('plan', 'active');
+    appendOutput('🔄 Regenerating plan with modified request...\n\n');
+    
+    try {
+        const planResponse = await fetch(`${API_BASE}/genesis/plan`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                user_intent: newIntent,
+                target_url: targetUrl
+            })
+        });
+        
+        const planResult = await planResponse.json();
+        
+        if (planResponse.ok && planResult.plan) {
+            updatePipeline('plan', 'completed');
+            
+            appendOutput('\n📋 UPDATED EXECUTION PLAN:\n');
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            const formattedPlan = formatPlanOutput(planResult.plan);
+            appendOutput(formattedPlan + '\n\n');
+            
+            appendOutput('═'.repeat(60) + '\n\n');
+            
+            // Show approval buttons again
+            const approvalDiv = document.createElement('div');
+            approvalDiv.style.cssText = 'display: flex; gap: 10px; margin: 15px 0;';
+            approvalDiv.innerHTML = `
+                <button onclick="approveAndExecute()" style="
+                    padding: 10px 20px;
+                    background: #22c55e;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">✅ Approve & Execute</button>
+                <button onclick="modifyPlan()" style="
+                    padding: 10px 20px;
+                    background: #f59e0b;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">✏️ Modify Again</button>
+                <button onclick="cancelCreation()" style="
+                    padding: 10px 20px;
+                    background: #ef4444;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-weight: 600;
+                ">❌ Cancel</button>
+            `;
+            
+            const outputContainer = document.getElementById('outputContainer');
+            outputContainer.appendChild(approvalDiv);
+            
+            currentCreationContext.plan = planResult.plan;
+            currentCreationContext.userIntent = newIntent;
+        }
+    } catch (error) {
+        updatePipeline('plan', 'failed');
+        appendOutput(`\n❌ Error: ${error.message}\n`);
+    }
+}
+
+function cancelCreation() {
+    appendOutput('\n❌ Creation cancelled by user.\n');
+    const createBtn = document.querySelector('.btn-create');
+    createBtn.disabled = false;
+    createBtn.textContent = 'Create Agent';
+    resetPipeline();
+    currentCreationContext = null;
+}
+
+window.approveAndExecute = approveAndExecute;
+window.modifyPlan = modifyPlan;
+window.cancelCreation = cancelCreation;
+window.createAgent = createAgent;
+
+// ==================== PIPELINE ====================
+
+function updatePipeline(step, status) {
+    const stepEl = document.getElementById(`step-${step}`);
+    if (!stepEl) {
+        console.warn(`Pipeline step not found: step-${step}`);
+        return;
+    }
+    
+    // Remove previous statuses
+    stepEl.classList.remove('pending', 'active', 'completed', 'failed');
+    stepEl.classList.add(status);
+}
+
+function resetPipeline() {
+    const steps = ['plan', 'generate', 'test', 'review', 'deploy'];
+    steps.forEach(step => {
+        updatePipeline(step, 'pending');
+    });
+}
+
+// ==================== OUTPUT ====================
+
+function appendOutput(text) {
+    const container = document.getElementById('outputContainer');
+    
+    // Remove placeholder if present
+    const placeholder = container.querySelector('.output-placeholder');
+    if (placeholder) {
+        container.innerHTML = '';
+    }
+    
+    // Append text
+    const span = document.createElement('span');
+    span.textContent = text.replace(/\\n/g, '\n');
+    container.appendChild(span);
+    
+    // Auto-scroll to bottom
+    container.scrollTop = container.scrollHeight;
+}
+
+function clearOutput() {
+    const container = document.getElementById('outputContainer');
+    container.innerHTML = `
+        <div class="output-placeholder">
+            <div class="placeholder-icon">🤖</div>
+            <p>Create an agent to see live output</p>
+        </div>
+    `;
+    resetPipeline();
+}
+
+function copyOutput() {
+    const container = document.getElementById('outputContainer');
+    const text = container.innerText;
+    navigator.clipboard.writeText(text)
+        .then(() => showToast('📋 Output copied!'))
+        .catch(err => console.error('Copy failed:', err));
+}
+
+function downloadOutput() {
+    const container = document.getElementById('outputContainer');
+    const text = container.innerText;
+    
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ngenesis_output_${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showToast('⬇️ Output downloaded!');
+}
+
+window.clearOutput = clearOutput;
+window.copyOutput = copyOutput;
+window.downloadOutput = downloadOutput;
+
+// ==================== RUN AGENT ====================
+
+async function runSelectedAgent() {
+    if (!selectedAgentId) {
+        showToast('Please select an agent first');
+        return;
+    }
+    
+    const runBtn = document.getElementById('runAgentBtn');
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.textContent = '⏳ Running...';
+    }
+    
+    // Get selected tools
+    const toolsList = Array.from(selectedTools);
+    const useOrchestration = toolsList.length > 1; // Use orchestration for multi-tool
+    
+    appendOutput(`\n\n${'═'.repeat(60)}\n`);
+    appendOutput(`🚀 STARTING MULTI-TOOL ORCHESTRATION\n`);
+    appendOutput(`${'═'.repeat(60)}\n\n`);
+    appendOutput(`🎯 Agent: ${selectedAgentId.substring(0, 8)}...\n`);
+    appendOutput(`🛠️ Selected Tools: ${toolsList.join(', ')}\n`);
+    
+    if (useOrchestration) {
+        appendOutput(`🔄 Feedback Loop: ENABLED\n`);
+        appendOutput(`\n⏳ Phase 1: Executing tools...\n`);
+    }
+    
+    try {
+        // Use orchestrate endpoint for multi-tool, run for single tool
+        const endpoint = useOrchestration 
+            ? `${API_BASE}/agent/${selectedAgentId}/orchestrate`
+            : `${API_BASE}/agent/${selectedAgentId}/run`;
+        
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                selected_tools: toolsList,
+                target_url: document.getElementById('targetUrl')?.value || ''
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Show iterations if available
+            if (result.iterations && result.iterations.length > 0) {
+                appendOutput(`\n📊 PIPELINE EXECUTION LOG\n`);
+                appendOutput(`${'─'.repeat(40)}\n`);
+                result.iterations.forEach((iter, i) => {
+                    appendOutput(`  ${i + 1}. ${iter.phase.replace(/_/g, ' ').toUpperCase()}\n`);
+                    if (iter.tools_executed) {
+                        appendOutput(`     Tools: ${iter.tools_executed.join(' → ')}\n`);
+                    }
+                });
+                appendOutput(`\n`);
+            }
+            
+            // Show tool outputs
+            if (result.outputs) {
+                appendOutput(`\n📦 TOOL OUTPUTS\n`);
+                appendOutput(`${'─'.repeat(40)}\n`);
+                for (const [tool, output] of Object.entries(result.outputs)) {
+                    appendOutput(`\n🔧 ${tool.toUpperCase()}:\n`);
+                    if (tool === 'freepik' && output.image_url) {
+                        appendOutput(`   🖼️ Image: ${output.image_url}\n`);
+                    } else if (tool === 'tinyfish' && output.ai_news_summary) {
+                        appendOutput(`   📰 Found ${output.ai_news_summary.top_5_developments?.length || 0} developments\n`);
+                        output.ai_news_summary.top_5_developments?.forEach((dev, i) => {
+                            appendOutput(`   ${i + 1}. ${dev.title}\n`);
+                        });
+                    } else {
+                        appendOutput(`   ${JSON.stringify(output, null, 2).substring(0, 300)}...\n`);
+                    }
+                }
+            }
+            
+            // Show Gemini synthesis (feedback loop result)
+            if (result.synthesis) {
+                appendOutput(`\n\n🧠 GEMINI SYNTHESIS (Feedback Loop)\n`);
+                appendOutput(`${'═'.repeat(60)}\n\n`);
+                
+                const syn = result.synthesis;
+                
+                // Quality Assessment
+                if (syn.quality_assessment) {
+                    const qa = syn.quality_assessment;
+                    appendOutput(`📊 Quality Assessment:\n`);
+                    appendOutput(`   Completeness: ${qa.completeness_score || '?'}/10\n`);
+                    appendOutput(`   Data Quality: ${qa.data_quality_score || '?'}/10\n`);
+                    if (qa.missing_elements?.length) {
+                        appendOutput(`   Missing: ${qa.missing_elements.join(', ')}\n`);
+                    }
+                    appendOutput(`\n`);
+                }
+                
+                // Final Response
+                if (syn.final_response) {
+                    const fr = syn.final_response;
+                    appendOutput(`📝 FINAL SYNTHESIZED RESPONSE:\n`);
+                    appendOutput(`${'─'.repeat(40)}\n\n`);
+                    
+                    if (fr.summary) {
+                        appendOutput(`📌 Summary:\n${fr.summary}\n\n`);
+                    }
+                    
+                    if (fr.key_insights?.length) {
+                        appendOutput(`💡 Key Insights:\n`);
+                        fr.key_insights.forEach((insight, i) => {
+                            appendOutput(`   ${i + 1}. ${insight}\n`);
+                        });
+                        appendOutput(`\n`);
+                    }
+                    
+                    if (fr.detailed_content) {
+                        appendOutput(`📄 Detailed Content:\n${fr.detailed_content.substring(0, 1000)}${fr.detailed_content.length > 1000 ? '...' : ''}\n\n`);
+                    }
+                    
+                    if (fr.generated_assets?.images?.length) {
+                        appendOutput(`🖼️ Generated Images:\n`);
+                        fr.generated_assets.images.forEach(url => {
+                            appendOutput(`   ${url}\n`);
+                        });
+                    }
+                }
+                
+                // Pipeline Feedback
+                if (syn.pipeline_feedback) {
+                    const pf = syn.pipeline_feedback;
+                    appendOutput(`\n🔄 Pipeline Feedback:\n`);
+                    if (pf.tools_that_worked_well?.length) {
+                        appendOutput(`   ✅ Worked well: ${pf.tools_that_worked_well.join(', ')}\n`);
+                    }
+                    if (pf.tools_that_need_improvement?.length) {
+                        appendOutput(`   ⚠️ Needs improvement: ${pf.tools_that_need_improvement.join(', ')}\n`);
+                    }
+                    if (pf.suggested_additional_tools?.length) {
+                        appendOutput(`   💡 Suggested tools: ${pf.suggested_additional_tools.join(', ')}\n`);
+                    }
+                    if (pf.should_iterate) {
+                        appendOutput(`   🔁 Iteration needed: ${pf.iteration_reason}\n`);
+                    }
+                }
+            }
+            
+            // Show refinement if there was one
+            if (result.refinement) {
+                appendOutput(`\n\n🔧 REFINEMENT (Iteration 3)\n`);
+                appendOutput(`${'─'.repeat(40)}\n`);
+                appendOutput(`${result.refinement.substring(0, 500)}...\n`);
+            }
+            
+            appendOutput(`\n${'═'.repeat(60)}\n`);
+            appendOutput(`✅ ORCHESTRATION COMPLETE\n`);
+            appendOutput(`   Iterations: ${result.iterations?.length || 1}\n`);
+            appendOutput(`   Tools Used: ${result.tools_used?.join(' → ') || 'N/A'}\n`);
+            appendOutput(`${'═'.repeat(60)}\n`);
+            
+            // Store in history
+            addToResultsHistory({
+                agentId: selectedAgentId,
+                timestamp: new Date().toISOString(),
+                results: result.final_output || result.outputs,
+                tools_used: result.tools_used,
+                synthesis: result.synthesis
+            });
+            
+            window.currentResults = result;
+            showToast('✅ Orchestration complete with feedback loop!');
+        } else {
+            throw new Error(result.error || 'Execution failed');
+        }
+    } catch (error) {
+        appendOutput(`\n❌ Error: ${error.message}\n`);
+        showToast(`❌ ${error.message}`);
+    } finally {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.textContent = '▶️ Run';
+        }
+    }
+}
+
+window.runSelectedAgent = runSelectedAgent;
+
+// ==================== RESULTS HISTORY ====================
+
+function addToResultsHistory(result) {
+    resultsHistory.unshift(result);
+    if (resultsHistory.length > 10) resultsHistory.pop();
+    renderResultsHistory();
+}
+
+function renderResultsHistory() {
+    const content = document.getElementById('resultsHistoryContent');
+    if (!content) return;
+    
+    if (resultsHistory.length === 0) {
+        content.innerHTML = '<p style="color: var(--text-muted); text-align: center;">No results yet</p>';
+        return;
+    }
+    
+    content.innerHTML = resultsHistory.map((item, idx) => `
+        <div class="result-item" onclick="loadResult(${idx})">
+            <div class="result-item-header">
+                <span>Agent ${item.agentId.substring(0, 8)}...</span>
+                <span class="result-item-time">${formatTimestamp(item.timestamp)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function loadResult(idx) {
+    const result = resultsHistory[idx];
+    if (!result) return;
+    
+    clearOutput();
+    appendOutput(`📊 Results from ${formatTimestamp(result.timestamp)}:\\n\\n`);
+    appendOutput(JSON.stringify(result.results, null, 2));
+}
+
+function toggleResultsHistory() {
+    const content = document.getElementById('resultsHistoryContent');
+    const icon = document.querySelector('.results-history-header span:last-child');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.textContent = '▲';
+    } else {
+        content.style.display = 'none';
+        icon.textContent = '▼';
+    }
+}
+
+window.loadResult = loadResult;
+window.toggleResultsHistory = toggleResultsHistory;
+
+// ==================== AGENTS LIST ====================
+
 async function loadAgents() {
     try {
         const response = await fetch(`${API_BASE}/status`);
         const data = await response.json();
-
-        const agentsList = document.getElementById('agentsList');
-
+        
+        const agentList = document.getElementById('agentList');
+        
         if (data.agents && data.agents.length > 0) {
-            agentsList.innerHTML = data.agents.map(agent => `
+            agentList.innerHTML = data.agents.map(agent => `
                 <div class="agent-item ${agent.agent_id === selectedAgentId ? 'selected' : ''}"
                      onclick="selectAgent('${agent.agent_id}')">
-                    <div class="agent-header">
-                        <span class="agent-id">${agent.agent_id.substring(0, 8)}...</span>
-                        <span class="agent-status ${agent.status}">${formatStatus(agent.status)}</span>
+                    <div class="agent-item-header">
+                        <span class="agent-item-name">${agent.agent_id.substring(0, 8)}...</span>
+                        <span class="agent-item-status ${agent.status === 'completed' ? '' : agent.status === 'failed' ? 'failed' : 'pending'}">
+                            ${agent.status === 'completed' ? '✓' : agent.status === 'failed' ? '✗' : '⏳'}
+                        </span>
                     </div>
-                    <div class="agent-info">
-                        ${agent.code_quality_score ? `<span>⭐ ${agent.code_quality_score}/100</span>` : ''}
-                        ${agent.monitoring_active ? '<span>👁️ Monitoring</span>' : ''}
-                        ${agent.test_data_generated ? '<span>🧪 Tested</span>' : ''}
+                    <div class="agent-item-meta">
+                        ${agent.monitoring_active ? '👁️ Monitoring' : ''}
+                        ${agent.code_quality_score ? `⭐ ${agent.code_quality_score}` : ''}
                     </div>
                 </div>
             `).join('');
         } else {
-            agentsList.innerHTML = '<p class="empty-state">No agents created yet. Create one above to get started!</p>';
+            agentList.innerHTML = '<p class="empty-state-small">No agents yet</p>';
         }
     } catch (error) {
         console.error('Failed to load agents:', error);
     }
 }
 
-// Select Agent and Load Timeline
-async function selectAgent(agentId) {
+function selectAgent(agentId) {
     selectedAgentId = agentId;
-
-    // Update UI
+    
+    // Update UI selection
     document.querySelectorAll('.agent-item').forEach(item => {
         item.classList.remove('selected');
     });
     event.currentTarget?.classList.add('selected');
-
-    // Load timeline and agent files
-    await loadTimeline(agentId);
-    await loadAgentFiles(agentId);
-}
-
-async function loadTimeline(agentId) {
-    try {
-        const response = await fetch(`${API_BASE}/timeline/${agentId}`);
-        const data = await response.json();
-
-        const timelineSection = document.getElementById('timelineSection');
-        const timelineEl = document.getElementById('timeline');
-        const selectedIdEl = document.getElementById('selectedAgentId');
-
-        selectedIdEl.textContent = agentId.substring(0, 16) + '...';
-        timelineSection.style.display = 'block';
-
-        if (data.events && data.events.length > 0) {
-            timelineEl.innerHTML = data.events.map(event => `
-                <div class="timeline-item ${event.status}">
-                    <div class="timeline-event">${event.event_name}</div>
-                    ${event.details ? `<div class="timeline-details">${event.details}</div>` : ''}
-                    <div class="timeline-timestamp">${formatTimestamp(event.timestamp)}</div>
-                </div>
-            `).join('');
-        } else {
-            timelineEl.innerHTML = '<p class="empty-state">No timeline events yet.</p>';
-        }
-
-        // Scroll to timeline
-        timelineSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    } catch (error) {
-        console.error('Failed to load timeline:', error);
+    
+    // Enable the run button
+    const runBtn = document.getElementById('runAgentBtn');
+    if (runBtn) {
+        runBtn.disabled = false;
     }
+    
+    // Load agent details
+    loadAgentDetails(agentId);
 }
 
-// Load Agent Files
-async function loadAgentFiles(agentId) {
+async function loadAgentDetails(agentId) {
     try {
         const response = await fetch(`${API_BASE}/agent/${agentId}/files`);
         const data = await response.json();
-
-        const outputSection = document.getElementById('agentOutputSection');
-        const outputMeta = document.getElementById('agentOutputMeta');
-        const outputFiles = document.getElementById('agentOutputFiles');
-        const resultsPreview = document.getElementById('resultsPreview');
-
+        
+        clearOutput();
+        appendOutput(`📋 Agent: ${agentId}\n`);
+        appendOutput(`Status: ${data.status || 'unknown'}\n\n`);
+        
         if (data.files && data.files.length > 0) {
-            outputSection.style.display = 'block';
+            appendOutput(`📁 Files:\n`);
+            data.files.forEach(file => {
+                appendOutput(`\n--- ${file.filename} ---\n`);
+                appendOutput(file.content.substring(0, 500));
+                if (file.content.length > 500) {
+                    appendOutput('\n... (truncated)\n');
+                }
+            });
+        }
+        
+        // Store files for download
+        window.agentFiles = data.files;
+        
+        // Show run instructions
+        if (data.status === 'completed') {
+            appendOutput(`\n\n💡 Click "▶️ Run" to execute this agent\n`);
+        }
+        
+    } catch (error) {
+        console.error('Failed to load agent details:', error);
+        appendOutput(`Error loading agent: ${error.message}`);
+    }
+}
 
-            // Build meta information with better display
-            let metaHtml = '';
-            if (data.icon_url && !data.icon_url.includes('placeholder')) {
-                metaHtml += `<img src="${data.icon_url}" alt="Agent Icon" class="agent-icon-preview">`;
-            }
-            if (data.status === 'completed') {
-                metaHtml += '<span class="meta-item success">✅ Ready to Run</span>';
-            }
-            if (data.code_quality_score) {
-                metaHtml += `<span class="meta-item">⭐ Quality: ${data.code_quality_score}/100</span>`;
-            }
-            if (data.monitoring_active) {
-                metaHtml += `<span class="meta-item">👁️ Monitoring Active</span>`;
-            }
-            if (data.yutori_scout_id) {
-                metaHtml += `<span class="meta-item">🔄 Scout: ${data.yutori_scout_id.substring(0, 8)}...</span>`;
-            }
-            outputMeta.innerHTML = metaHtml;
+window.selectAgent = selectAgent;
 
-            // Reset results preview
-            if (resultsPreview) {
-                resultsPreview.style.display = 'none';
-            }
+// Focus on create panel (from sidebar button)
+function focusCreatePanel() {
+    document.getElementById('templateSelect').focus();
+    document.querySelector('.input-section').scrollIntoView({ behavior: 'smooth' });
+}
 
-            // Build file cards with collapsible view
-            outputFiles.innerHTML = data.files.map((file, index) => `
-                <div class="file-card">
-                    <div class="file-header" onclick="toggleFileContent(${index})">
-                        <span class="file-name">
-                            📄 ${file.filename}
-                            <span class="file-language">${file.language}</span>
-                        </span>
-                        <div class="file-actions">
-                            <button onclick="event.stopPropagation(); copyFileContent(${index})">📋 Copy</button>
-                            <button onclick="event.stopPropagation(); downloadFile('${file.filename}', ${index})">⬇️ Download</button>
-                            <span class="toggle-icon" id="toggleIcon_${index}">▼</span>
-                        </div>
+window.focusCreatePanel = focusCreatePanel;
+
+// ==================== SCOUTS LIST ====================
+
+async function loadScouts() {
+    try {
+        const response = await fetch(`${API_BASE}/scouts`);
+        const data = await response.json();
+        
+        const scoutList = document.getElementById('scoutList');
+        
+        if (data.scouts && data.scouts.length > 0) {
+            scoutList.innerHTML = data.scouts.map(scout => `
+                <div class="scout-item">
+                    <div class="scout-item-header">
+                        <span class="scout-item-id">👁️ ${(scout.task_id || scout.id || 'Scout').substring(0, 8)}...</span>
+                        <span class="scout-status ${scout.status || 'active'}">${scout.status || 'active'}</span>
                     </div>
-                    <div class="file-content" id="fileContentWrapper_${index}">
-                        <pre><code id="fileContent_${index}">${escapeHtml(file.content)}</code></pre>
-                    </div>
+                    <div class="scout-item-query">${(scout.query || 'Monitoring...').substring(0, 30)}...</div>
                 </div>
             `).join('');
-
-            // Store file contents for copy/download
-            window.agentFiles = data.files;
-            
-            // Scroll to output section
-            outputSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
-            outputSection.style.display = 'none';
+            scoutList.innerHTML = '<div class="empty-state-small">No active scouts</div>';
         }
     } catch (error) {
-        console.error('Failed to load agent files:', error);
+        console.error('Failed to load scouts:', error);
+        const scoutList = document.getElementById('scoutList');
+        scoutList.innerHTML = '<div class="empty-state-small">No active scouts</div>';
     }
 }
 
-// Toggle file content visibility
-function toggleFileContent(index) {
-    const wrapper = document.getElementById(`fileContentWrapper_${index}`);
-    const icon = document.getElementById(`toggleIcon_${index}`);
+// ==================== AUTO REFRESH ====================
+
+function startAutoRefresh() {
+    refreshInterval = setInterval(async () => {
+        await loadAgents();
+    }, 10000);
+}
+
+// ==================== UTILITIES ====================
+
+function formatPlanOutput(planText) {
+    // Convert markdown-style headings and code blocks to readable terminal format
+    let formatted = planText;
     
-    if (wrapper.style.display === 'none') {
-        wrapper.style.display = 'block';
-        icon.textContent = '▼';
-    } else {
-        wrapper.style.display = 'none';
-        icon.textContent = '▶';
-    }
+    // Convert markdown headings to styled text
+    formatted = formatted.replace(/^## (.*?)$/gm, '\n▶ $1\n' + '─'.repeat(40));
+    formatted = formatted.replace(/^### (.*?)$/gm, '\n  ▸ $1');
+    
+    // Highlight code blocks
+    formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+        const language = lang ? `[${lang.toUpperCase()}]` : '[CODE]';
+        return `\n${language}\n${'┌' + '─'.repeat(58) + '┐'}\n${code.split('\n').map(line => `│ ${line.padEnd(57)}│`).join('\n')}\n${'└' + '─'.repeat(58) + '┘'}\n`;
+    });
+    
+    // Highlight bullet points
+    formatted = formatted.replace(/^- (.*?)$/gm, '  • $1');
+    formatted = formatted.replace(/^\* (.*?)$/gm, '  • $1');
+    
+    // Highlight numbered lists
+    formatted = formatted.replace(/^\d+\. (.*?)$/gm, (match, text) => `  ${match}`);
+    
+    // Add extra spacing around sections
+    formatted = formatted.replace(/\n▶/g, '\n\n▶');
+    
+    return formatted;
 }
 
-// Make toggle function globally accessible
-window.toggleFileContent = toggleFileContent;
-
-// Escape HTML for code display
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-// Copy file content to clipboard
-function copyFileContent(index) {
-    if (window.agentFiles && window.agentFiles[index]) {
-        navigator.clipboard.writeText(window.agentFiles[index].content)
-            .then(() => {
-                showToast('✅ Code copied to clipboard!');
-            })
-            .catch(err => {
-                console.error('Failed to copy:', err);
-            });
-    }
-}
-
-// Show toast notification
 function showToast(message) {
-    // Remove existing toast
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
     
@@ -702,413 +1501,28 @@ function showToast(message) {
     toast.textContent = message;
     document.body.appendChild(toast);
     
-    // Trigger animation
     setTimeout(() => toast.classList.add('show'), 10);
-    
-    // Remove after delay
     setTimeout(() => {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 2500);
 }
 
-// Download file
-function downloadFile(filename, index) {
-    if (window.agentFiles && window.agentFiles[index]) {
-        const blob = new Blob([window.agentFiles[index].content], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-}
-
-// Make functions globally accessible
-window.copyFileContent = copyFileContent;
-window.downloadFile = downloadFile;
-
-// Run Agent - Execute the generated Python script
-async function runAgent() {
-    if (!selectedAgentId) {
-        showToast('Please select an agent first');
-        return;
-    }
-
-    const runBtn = document.getElementById('runAgentBtn');
-    const resultsPreview = document.getElementById('resultsPreview');
-    const resultsContent = document.getElementById('resultsContent');
-    
-    // Show running state
-    runBtn.disabled = true;
-    runBtn.innerHTML = '<span class="running-spinner"></span> Running...';
-    
-    try {
-        const response = await fetch(`${API_BASE}/agent/${selectedAgentId}/run`, {
-            method: 'POST'
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            // Store results for download
-            window.agentResults = data.results;
-            
-            // Show results preview
-            resultsPreview.style.display = 'block';
-            resultsContent.innerHTML = `<pre>${formatResults(data.results)}</pre>`;
-            
-            // Scroll to results
-            resultsPreview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        } else {
-            throw new Error(data.error || 'Failed to run agent');
-        }
-    } catch (error) {
-        console.error('Failed to run agent:', error);
-        resultsPreview.style.display = 'block';
-        resultsContent.innerHTML = `<pre style="color: #ff6b6b;">Error: ${error.message}\n\nNote: This is a preview. In production, the agent would:\n1. Connect to the target website\n2. Extract data using AgentQL selectors\n3. Return structured results\n\nThe generated agent code is ready to use!</pre>`;
-    } finally {
-        runBtn.disabled = false;
-        runBtn.innerHTML = '▶️ Run Agent Now';
-    }
-}
-
-// Format results for display
-function formatResults(results) {
-    if (typeof results === 'string') {
-        return results;
-    }
-    return JSON.stringify(results, null, 2);
-}
-
-// Download all agent files as ZIP
-async function downloadAllFiles() {
-    if (!window.agentFiles || window.agentFiles.length === 0) {
-        showToast('No files to download');
-        return;
-    }
-
-    // For simplicity, download as combined text file
-    // In production, you'd use a library like JSZip
-    let combined = '';
-    window.agentFiles.forEach(file => {
-        combined += `\n${'='.repeat(50)}\n`;
-        combined += `FILE: ${file.filename}\n`;
-        combined += `${'='.repeat(50)}\n\n`;
-        combined += file.content;
-        combined += '\n\n';
-    });
-
-    const blob = new Blob([combined], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `agent_${selectedAgentId.substring(0, 8)}_files.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showToast('✅ Files downloaded!');
-}
-
-// Download results in specified format
-function downloadResults(format) {
-    if (!window.agentResults) {
-        showToast('No results to download. Run the agent first!');
-        return;
-    }
-
-    let content, filename, mimeType;
-
-    if (format === 'json') {
-        content = JSON.stringify(window.agentResults, null, 2);
-        filename = `agent_results_${selectedAgentId.substring(0, 8)}.json`;
-        mimeType = 'application/json';
-    } else if (format === 'csv') {
-        content = convertToCSV(window.agentResults.data || window.agentResults);
-        filename = `agent_results_${selectedAgentId.substring(0, 8)}.csv`;
-        mimeType = 'text/csv';
-    }
-
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    showToast(`✅ Downloaded as ${format.toUpperCase()}!`);
-}
-
-// Convert results to CSV format
-function convertToCSV(data) {
-    if (!Array.isArray(data)) {
-        data = [data];
-    }
-    if (data.length === 0) return '';
-
-    const headers = Object.keys(data[0]);
-    const rows = data.map(row => 
-        headers.map(header => {
-            const val = row[header];
-            // Escape quotes and wrap in quotes if contains comma
-            if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
-                return `"${val.replace(/"/g, '""')}"`;
-            }
-            return val;
-        }).join(',')
-    );
-
-    return [headers.join(','), ...rows].join('\n');
-}
-
-// Copy results to clipboard
-function copyResults() {
-    if (!window.agentResults) {
-        showToast('No results to copy. Run the agent first!');
-        return;
-    }
-
-    const text = JSON.stringify(window.agentResults, null, 2);
-    navigator.clipboard.writeText(text)
-        .then(() => showToast('✅ Results copied to clipboard!'))
-        .catch(err => console.error('Failed to copy:', err));
-}
-
-// Make new functions globally accessible
-window.runAgent = runAgent;
-window.downloadAllFiles = downloadAllFiles;
-window.downloadResults = downloadResults;
-window.copyResults = copyResults;
-
-// Load Scouts
-async function loadScouts() {
-    try {
-        const response = await fetch(`${API_BASE}/scouts`);
-        const data = await response.json();
-
-        const scoutsList = document.getElementById('scoutsList');
-
-        if (data.scouts && data.scouts.length > 0) {
-            scoutsList.innerHTML = data.scouts.map(scout => `
-                <div class="scout-item">
-                    <div class="scout-header">
-                        <span class="scout-id">${scout.task_id}</span>
-                        <span class="scout-status">${scout.status}</span>
-                    </div>
-                    <div class="scout-query">${scout.query || 'Monitoring active'}</div>
-                </div>
-            `).join('');
-        } else {
-            scoutsList.innerHTML = '<p class="empty-state">No active scouts. Create an agent with monitoring intent to deploy scouts.</p>';
-        }
-    } catch (error) {
-        console.error('Failed to load scouts:', error);
-        // Don't show error if scouts endpoint fails (might not have Yutori key)
-    }
-}
-
-// Auto-refresh
-function startAutoRefresh() {
-    // Refresh every 5 seconds
-    refreshInterval = setInterval(async () => {
-        await loadPrizeStats();
-        await loadAgents();
-
-        // Refresh timeline if an agent is selected
-        if (selectedAgentId) {
-            await loadTimeline(selectedAgentId);
-        }
-    }, 5000);
-}
-
-// Utility Functions
-function formatStatus(status) {
-    const statusMap = {
-        'initializing': '🎯 Getting ready...',
-        'planning': '🧠 Planning approach...',
-        'decomposing': '📋 Understanding task...',
-        'fabricating': '🧪 Testing setup...',
-        'reviewing': '✨ Checking quality...',
-        'verifying': '🔍 Final checks...',
-        'monitoring': '👁️ Setting up monitoring...',
-        'deploying': '🚀 Deploying agent...',
-        'completed': '✅ Ready to use!',
-        'failed': '❌ Something went wrong'
-    };
-    return statusMap[status] || status;
-}
-
 function formatTimestamp(timestamp) {
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
-
+    
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-
+    
     return date.toLocaleString();
 }
 
-// Cleanup on page unload
+window.showToast = showToast;
+
+// Cleanup
 window.addEventListener('beforeunload', () => {
-    if (refreshInterval) {
-        clearInterval(refreshInterval);
-    }
+    if (refreshInterval) clearInterval(refreshInterval);
 });
-
-// Workflow Visualization
-class WorkflowVisualizer {
-    constructor() {
-        this.nodes = [];
-        this.currentAgentId = null;
-    }
-
-    show(agentId) {
-        this.currentAgentId = agentId;
-        const workflowSection = document.getElementById('workflowSection');
-        if (workflowSection) {
-            workflowSection.style.display = 'block';
-            this.initializeNodes();
-            this.startPolling();
-        }
-    }
-
-    hide() {
-        const workflowSection = document.getElementById('workflowSection');
-        if (workflowSection) {
-            workflowSection.style.display = 'none';
-        }
-        if (this.pollingInterval) {
-            clearInterval(this.pollingInterval);
-        }
-    }
-
-    initializeNodes() {
-        // Define the workflow steps
-        this.nodes = [
-            { id: 'init', label: 'Initialize', icon: '🎯', status: 'pending', plugin: 'agentql' },
-            { id: 'plan', label: 'Planning', icon: '🧠', status: 'pending', plugin: 'gemini' },
-            { id: 'decompose', label: 'Decompose', icon: '📋', status: 'pending', plugin: 'gemini' },
-            { id: 'fabricate', label: 'Test Setup', icon: '🧪', status: 'pending', plugin: 'fabricate' },
-            { id: 'review', label: 'Quality Check', icon: '✨', status: 'pending', plugin: 'cline' },
-            { id: 'verify', label: 'Verify', icon: '🔍', status: 'pending', plugin: 'macroscope' },
-            { id: 'monitor', label: 'Monitoring', icon: '👁️', status: 'pending', plugin: 'yutori' },
-            { id: 'complete', label: 'Complete', icon: '✅', status: 'pending', plugin: 'agentql' }
-        ];
-        this.render();
-    }
-
-    render() {
-        const canvas = document.getElementById('workflowCanvas');
-        if (!canvas) return;
-        
-        const container = document.createElement('div');
-        container.className = 'workflow-container';
-
-        this.nodes.forEach((node, index) => {
-            // Create node element
-            const nodeEl = document.createElement('div');
-            nodeEl.className = `workflow-node ${node.status}`;
-            nodeEl.innerHTML = `
-                <div class="node-icon">${node.icon}</div>
-                <div class="node-label">${node.label}</div>
-                <div class="node-status">${this.getStatusIcon(node.status)}</div>
-            `;
-            container.appendChild(nodeEl);
-
-            // Add connector line if not last node
-            if (index < this.nodes.length - 1) {
-                const connector = document.createElement('div');
-                connector.className = 'workflow-connector';
-                container.appendChild(connector);
-            }
-        });
-
-        canvas.innerHTML = '';
-        canvas.appendChild(container);
-    }
-
-    getStatusIcon(status) {
-        const icons = {
-            'pending': '⏳',
-            'running': '⚡',
-            'completed': '✅',
-            'failed': '❌'
-        };
-        return icons[status] || '⏳';
-    }
-
-    updateFromTimeline(timeline) {
-        if (!timeline || timeline.length === 0) return;
-
-        // Map timeline statuses to workflow nodes
-        const statusMap = {
-            'initializing': 'init',
-            'planning': 'plan',
-            'decomposing': 'decompose',
-            'fabricating': 'fabricate',
-            'reviewing': 'review',
-            'verifying': 'verify',
-            'monitoring': 'monitor',
-            'deploying': 'complete',
-            'completed': 'complete',
-            'failed': 'complete'
-        };
-
-        // Get latest status
-        const latestEvent = timeline[timeline.length - 1];
-        const currentStep = statusMap[latestEvent.status] || 'init';
-
-        // Update nodes based on progress
-        let foundCurrent = false;
-        this.nodes.forEach(node => {
-            if (!foundCurrent) {
-                if (node.id === currentStep) {
-                    node.status = latestEvent.status === 'failed' ? 'failed' : 
-                                  latestEvent.status === 'completed' ? 'completed' : 'running';
-                    foundCurrent = true;
-                } else {
-                    node.status = 'completed';
-                }
-            } else {
-                node.status = 'pending';
-            }
-        });
-
-        this.render();
-    }
-
-    startPolling() {
-        // Poll for updates every 2 seconds
-        this.pollingInterval = setInterval(async () => {
-            if (!this.currentAgentId) return;
-
-            try {
-                const response = await fetch(`${API_BASE}/timeline/${this.currentAgentId}`);
-                const data = await response.json();
-                
-                if (data.events) {
-                    this.updateFromTimeline(data.events);
-                }
-
-                // Stop polling if completed or failed
-                if (data.status === 'completed' || data.status === 'failed') {
-                    clearInterval(this.pollingInterval);
-                }
-            } catch (error) {
-                console.error('Failed to poll workflow status:', error);
-            }
-        }, 2000);
-    }
-}
-
-// Initialize workflow visualizer (make it global)
-window.workflowViz = new WorkflowVisualizer();

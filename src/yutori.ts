@@ -22,7 +22,6 @@ export interface YutoriTaskStatus {
 
 /**
  * Yutori API Integration - Creates persistent web monitoring agents
- * Prize Category: Best Yutori API Project ($3,500)
  */
 export class YutoriMonitor {
   private apiKey: string;
@@ -67,11 +66,23 @@ export class YutoriMonitor {
         }
       );
 
-      console.log('[Yutori] Scout created:', response.data.task_id);
+      // Log full response for debugging
+      console.log('[Yutori] Scout created - full response:', JSON.stringify(response.data, null, 2));
+
+      // Handle different possible response structures
+      const taskId = response.data.task_id || 
+                     response.data.id || 
+                     response.data.taskId ||
+                     (response.data.task && response.data.task.id) ||
+                     'unknown';
+
+      const status = response.data.status || 'active';
+
+      console.log('[Yutori] Extracted task_id:', taskId);
 
       return {
-        task_id: response.data.task_id,
-        status: response.data.status,
+        task_id: taskId,
+        status: status,
         created_at: new Date().toISOString()
       };
 

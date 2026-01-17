@@ -6,7 +6,7 @@ export interface AgentRequest {
   personality?: 'professional' | 'aggressive' | 'friendly';
   agent_name?: string;
   template_id?: string;
-  output_format?: 'view' | 'json' | 'csv' | 'api';
+  output_format?: 'view' | 'json' | 'csv' | 'api' | 'text' | 'image' | 'both';
 }
 
 export interface BuildManifest {
@@ -37,7 +37,13 @@ export interface AgentGenerationStatus {
   icon_url?: string;
   agent_files?: string[];
   error?: string;
-  // New prize-related features
+  // Context for execution
+  context?: {
+    target_url: string;
+    user_intent: string;
+    personality: string;
+  };
+  // Prize-related features
   yutori_scout_id?: string;
   code_quality_score?: number;
   test_data_generated?: boolean;

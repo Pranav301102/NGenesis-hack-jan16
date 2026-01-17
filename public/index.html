@@ -4,230 +4,275 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NGenesis - Agents on Demand</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-top">
-                <h1>⚡ NGenesis - Agents on Demand</h1>
-                <div id="userSection" class="user-section">
-                    <!-- Login/Register or User info will be here -->
-                    <button id="loginBtn" class="btn-header" onclick="showAuthModal('login')">Login</button>
-                    <button id="registerBtn" class="btn-header-primary" onclick="showAuthModal('register')">Sign Up</button>
+    <div class="app-layout">
+        <!-- Left Sidebar - Agent List -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">⚡ NGenesis</h1>
+            </div>
+            <div class="sidebar-section">
+                <h3>Your Agents</h3>
+                <div id="agentList" class="agent-list">
+                    <div class="empty-state-small">No agents yet</div>
                 </div>
             </div>
-            <p class="subtitle">Create AI agents in seconds. No code required.</p>
-            <p class="tagline">Pick a template. Add your tools. Deploy your agent.</p>
-        </header>
-
-        <!-- Auth Modal -->
-        <div id="authModal" class="modal" style="display: none;">
-            <div class="modal-content auth-modal">
-                <button class="modal-close" onclick="closeAuthModal()">&times;</button>
-                
-                <!-- Login Form -->
-                <div id="loginForm" class="auth-form">
-                    <h2>👋 Welcome Back</h2>
-                    <p class="auth-subtitle">Sign in to access your agents</p>
-                    
-                    <form onsubmit="handleLogin(event)">
-                        <div class="form-group">
-                            <label for="loginEmail">Email</label>
-                            <input type="email" id="loginEmail" placeholder="you@example.com" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="loginPassword">Password</label>
-                            <input type="password" id="loginPassword" placeholder="••••••••" required>
-                        </div>
-                        <div id="loginError" class="auth-error" style="display: none;"></div>
-                        <button type="submit" class="btn-primary btn-full">Sign In</button>
-                    </form>
-                    
-                    <p class="auth-switch">
-                        Don't have an account? 
-                        <a href="#" onclick="switchAuthMode('register')">Sign up</a>
-                    </p>
-                </div>
-                
-                <!-- Register Form -->
-                <div id="registerForm" class="auth-form" style="display: none;">
-                    <h2>🚀 Create Account</h2>
-                    <p class="auth-subtitle">Start creating AI agents in seconds</p>
-                    
-                    <form onsubmit="handleRegister(event)">
-                        <div class="form-group">
-                            <label for="registerName">Name</label>
-                            <input type="text" id="registerName" placeholder="Your name">
-                        </div>
-                        <div class="form-group">
-                            <label for="registerEmail">Email</label>
-                            <input type="email" id="registerEmail" placeholder="you@example.com" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="registerPassword">Password</label>
-                            <input type="password" id="registerPassword" placeholder="At least 6 characters" required minlength="6">
-                        </div>
-                        <div id="registerError" class="auth-error" style="display: none;"></div>
-                        <button type="submit" class="btn-primary btn-full">Create Account</button>
-                    </form>
-                    
-                    <p class="auth-switch">
-                        Already have an account? 
-                        <a href="#" onclick="switchAuthMode('login')">Sign in</a>
-                    </p>
+            <div class="sidebar-section">
+                <h3>Active Scouts</h3>
+                <div id="scoutList" class="scout-list">
+                    <div class="empty-state-small">No scouts active</div>
                 </div>
             </div>
-        </div>
+            <div class="sidebar-footer">
+                <button class="btn-new-agent" onclick="focusCreatePanel()">
+                    + New Agent
+                </button>
+            </div>
+        </aside>
 
-        <!-- Stats Dashboard -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">📊</div>
-                <div class="stat-value" id="totalAgents">0</div>
-                <div class="stat-label">Total Agents</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">👁️</div>
-                <div class="stat-value" id="activeMonitoring">0</div>
-                <div class="stat-label">Watching</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">⭐</div>
-                <div class="stat-value" id="avgQuality">0</div>
-                <div class="stat-label">Agent Reliability</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">✅</div>
-                <div class="stat-value" id="successRate">0%</div>
-                <div class="stat-label">Success Rate</div>
-            </div>
-        </div>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Navigation Bar -->
+            <nav class="top-nav">
+                <div class="nav-left">
+                    <span id="currentView">Dashboard</span>
+                </div>
+                <div class="nav-right">
+                    <div id="userSection" class="user-section">
+                        <button class="btn-nav" onclick="showAuthModal('login')">Login</button>
+                        <button class="btn-nav-primary" onclick="showAuthModal('register')">Sign Up</button>
+                    </div>
+                </div>
+            </nav>
 
-        <!-- Template Gallery -->
-        <div class="card">
-            <h2>Choose Your Agent Type</h2>
-            <div class="template-grid" id="templateGallery">
-                <!-- Template cards will be loaded here by JS -->
-            </div>
-        </div>
+            <!-- Available Tools Section -->
+            <section class="tools-section">
+                <div class="tools-header">
+                    <h2>🧰 Select Tools</h2>
+                    <span class="tools-subtitle">Click to enable/disable tools for your task</span>
+                </div>
+                <div id="toolsGrid" class="tools-grid">
+                    <div class="tool-card" data-tool="gemini">
+                        <div class="tool-icon">🧠</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Gemini 2.5</div>
+                            <div class="tool-desc">AI reasoning & planning</div>
+                        </div>
+                        <div class="tool-usage" id="gemini-usage">Planning task approach</div>
+                    </div>
+                    <div class="tool-card" data-tool="agentql">
+                        <div class="tool-icon">🤖</div>
+                        <div class="tool-info">
+                            <div class="tool-name">AgentQL</div>
+                            <div class="tool-desc">Self-healing web scraping</div>
+                        </div>
+                        <div class="tool-usage" id="agentql-usage">Extract data from websites</div>
+                    </div>
+                    <div class="tool-card" data-tool="freepik">
+                        <div class="tool-icon">🎨</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Freepik AI</div>
+                            <div class="tool-desc">Image generation</div>
+                        </div>
+                        <div class="tool-usage" id="freepik-usage">Generate custom images</div>
+                    </div>
+                    <div class="tool-card" data-tool="yutori">
+                        <div class="tool-icon">👁️</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Yutori</div>
+                            <div class="tool-desc">Continuous monitoring</div>
+                        </div>
+                        <div class="tool-usage" id="yutori-usage">Watch for changes over time</div>
+                    </div>
+                </div>
+            </section>
 
-        <!-- Template Configuration Form (shown after selection) -->
-        <div id="templateConfig" class="card" style="display: none;">
-            <div class="section-header">
-                <h2>Configure Your Agent</h2>
-                <button class="btn-text" onclick="backToGallery()">← Back to Templates</button>
-            </div>
-            <div id="selectedTemplateInfo" class="selected-template-info"></div>
-            <form id="createAgentForm">
-                <div id="dynamicFields"></div>
-                
-                <div class="form-group">
-                    <label for="agentName">Agent Name (Optional)</label>
-                    <input
-                        type="text"
-                        id="agentName"
-                        placeholder="my_agent"
-                    >
+            <!-- Timeline / Pipeline Section -->
+            <section id="pipelineSection" class="pipeline-section">
+                <div class="pipeline-header">
+                    <h2>🔧 Agent Pipeline</h2>
+                    <span class="pipeline-status" id="pipelineStatus">Ready to create</span>
+                </div>
+                <div id="pipelineSteps" class="pipeline-steps">
+                    <div class="pipeline-step pending" id="step-plan" data-step="plan">
+                        <div class="step-icon">🧠</div>
+                        <div class="step-info">
+                            <div class="step-label">Plan</div>
+                            <div class="step-desc">Analyze task</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step pending" id="step-generate" data-step="generate">
+                        <div class="step-icon">💻</div>
+                        <div class="step-info">
+                            <div class="step-label">Generate</div>
+                            <div class="step-desc">Write code</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step pending" id="step-test" data-step="test">
+                        <div class="step-icon">🧪</div>
+                        <div class="step-info">
+                            <div class="step-label">Test</div>
+                            <div class="step-desc">Validate</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step pending" id="step-review" data-step="review">
+                        <div class="step-icon">✨</div>
+                        <div class="step-info">
+                            <div class="step-label">Review</div>
+                            <div class="step-desc">Quality check</div>
+                        </div>
+                    </div>
+                    <div class="pipeline-connector"></div>
+                    <div class="pipeline-step pending" id="step-deploy" data-step="deploy">
+                        <div class="step-icon">🚀</div>
+                        <div class="step-info">
+                            <div class="step-label">Deploy</div>
+                            <div class="step-desc">Go live</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live Output Section -->
+            <section id="outputSection" class="output-section">
+                <div class="output-header">
+                    <h2>📊 Live Output</h2>
+                    <div class="output-actions">
+                        <button id="runAgentBtn" class="btn-run" onclick="runSelectedAgent()" disabled>
+                            ▶️ Run
+                        </button>
+                        <button class="btn-icon-small" onclick="clearOutput()" title="Clear">🗑️</button>
+                        <button class="btn-icon-small" onclick="copyOutput()" title="Copy">📋</button>
+                        <button class="btn-icon-small" onclick="downloadOutput()" title="Download">⬇️</button>
+                    </div>
+                </div>
+                <div id="outputContainer" class="output-container">
+                    <div class="output-placeholder">
+                        <div class="placeholder-icon">📭</div>
+                        <p>Select an agent and run it to see output</p>
+                    </div>
+                </div>
+                <!-- Previous Results -->
+                <div id="resultsHistory" class="results-history">
+                    <div class="results-history-header" onclick="toggleResultsHistory()">
+                        <span>📁 Previous Results</span>
+                        <span class="toggle-icon">▼</span>
+                    </div>
+                    <div id="resultsHistoryContent" class="results-history-content" style="display: none;">
+                        <div class="empty-state-small">No previous results</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom Input Section -->
+            <section id="inputSection" class="input-section">
+                <!-- Example Tasks -->
+                <div class="example-tasks">
+                    <span class="example-label">Try:</span>
+                    <button class="example-btn" onclick="setExampleTask('research')">� Research AI trends and generate a blog header image</button>
+                    <button class="example-btn" onclick="setExampleTask('monitor')">� Monitor iPhone prices on Amazon and alert me</button>
+                    <button class="example-btn" onclick="setExampleTask('scrape')">� Scrape product reviews and summarize them</button>
                 </div>
 
-                <div class="form-group">
-                    <label>How do you want your results?</label>
-                    <div class="output-options">
-                        <label class="output-option">
-                            <input type="radio" name="outputFormat" value="view" checked>
-                            <span class="option-box">👁️ View in Dashboard</span>
+                <!-- Main Prompt Input -->
+                <div class="prompt-row">
+                    <div class="prompt-wrapper">
+                        <textarea id="mainPrompt" class="main-prompt" placeholder="Describe your task... e.g., 'Research the latest AI news, summarize findings, and generate a professional blog image about it'" rows="2"></textarea>
+                    </div>
+                    <input type="url" id="targetUrl" class="target-url" placeholder="Target URL (optional)">
+                    <button id="createAgentBtn" class="btn-create" onclick="createAgentFromPrompt()">
+                        🚀 Orchestrate
+                    </button>
+                </div>
+
+                <!-- Output Type Selector -->
+                <div class="output-type-row">
+                    <span class="type-label">Output:</span>
+                    <div class="type-options">
+                        <label class="type-option">
+                            <input type="radio" name="outputType" value="text" checked>
+                            <span>📝 Text</span>
                         </label>
-                        <label class="output-option">
-                            <input type="radio" name="outputFormat" value="json">
-                            <span class="option-box">📄 Download JSON</span>
+                        <label class="type-option">
+                            <input type="radio" name="outputType" value="image">
+                            <span>🖼️ Image</span>
                         </label>
-                        <label class="output-option">
-                            <input type="radio" name="outputFormat" value="csv">
-                            <span class="option-box">📊 Download CSV</span>
+                        <label class="type-option">
+                            <input type="radio" name="outputType" value="both">
+                            <span>📊 Both</span>
                         </label>
-                        <label class="output-option">
-                            <input type="radio" name="outputFormat" value="api">
-                            <span class="option-box">🔌 API Endpoint</span>
+                        <label class="type-option">
+                            <input type="radio" name="outputType" value="json">
+                            <span>{ } JSON</span>
                         </label>
                     </div>
                 </div>
+            </section>
+        </main>
+    </div>
 
-                <button type="submit" class="btn-primary">
-                    <span class="btn-icon">🚀</span>
-                    Create Agent
-                </button>
-            </form>
-
-            <div id="creationStatus" class="status-message" style="display: none;"></div>
-        </div>
-
-        <!-- Agent Workflow Section (shown during creation) -->
-        <div id="workflowSection" class="card" style="display: none;">
-            <h2>🔄 Agent Building Process</h2>
-            <div id="workflowCanvas" class="workflow-canvas"></div>
-        </div>
-
-        <!-- Active Agents List -->
-        <div class="card">
-            <h2>Active Agents</h2>
-            <div id="agentsList" class="agents-list">
-                <p class="empty-state">No agents created yet. Create one above to get started!</p>
-            </div>
-        </div>
-
-        <!-- Selected Agent Timeline -->
-        <div id="timelineSection" class="card" style="display: none;">
-            <h2>Agent Timeline: <span id="selectedAgentId"></span></h2>
-            <div id="timeline" class="timeline"></div>
-        </div>
-
-        <!-- Agent Output Section (shows generated files) -->
-        <div id="agentOutputSection" class="card results-card" style="display: none;">
-            <div class="section-header">
-                <h2>🎉 Your Agent is Ready!</h2>
-                <div class="action-buttons">
-                    <button id="runAgentBtn" class="btn-success" onclick="runAgent()">
-                        ▶️ Run Agent Now
-                    </button>
-                    <button class="btn-secondary" onclick="downloadAllFiles()">
-                        📦 Download All
-                    </button>
-                </div>
-            </div>
-            <div id="agentOutputMeta" class="agent-output-meta"></div>
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal" style="display: none;">
+        <div class="modal-content auth-modal">
+            <button class="modal-close" onclick="closeAuthModal()">&times;</button>
             
-            <!-- Results Preview -->
-            <div id="resultsPreview" class="results-preview" style="display: none;">
-                <h3>📊 Results</h3>
-                <div id="resultsContent" class="results-content"></div>
-                <div class="results-actions">
-                    <button onclick="downloadResults('json')">📄 JSON</button>
-                    <button onclick="downloadResults('csv')">📊 CSV</button>
-                    <button onclick="copyResults()">📋 Copy</button>
-                </div>
+            <div id="loginForm" class="auth-form">
+                <h2>👋 Welcome Back</h2>
+                <p class="auth-subtitle">Sign in to access your agents</p>
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="you@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <div id="loginError" class="auth-error" style="display: none;"></div>
+                    <button type="submit" class="btn-primary btn-full">Sign In</button>
+                </form>
+                <p class="auth-switch">
+                    Don't have an account? <a href="#" onclick="switchAuthMode('register')">Sign up</a>
+                </p>
             </div>
             
-            <!-- Generated Files -->
-            <div class="files-section">
-                <h3>📁 Generated Agent Files</h3>
-                <div id="agentOutputFiles" class="agent-output-files"></div>
+            <div id="registerForm" class="auth-form" style="display: none;">
+                <h2>🚀 Create Account</h2>
+                <p class="auth-subtitle">Start creating AI agents</p>
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="registerName" placeholder="Your name">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="registerEmail" placeholder="you@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="registerPassword" placeholder="At least 6 characters" required minlength="6">
+                    </div>
+                    <div id="registerError" class="auth-error" style="display: none;"></div>
+                    <button type="submit" class="btn-primary btn-full">Create Account</button>
+                </form>
+                <p class="auth-switch">
+                    Already have an account? <a href="#" onclick="switchAuthMode('login')">Sign in</a>
+                </p>
             </div>
         </div>
+    </div>
 
-        <!-- Active Scouts -->
-        <div class="card">
-            <h2>Active Yutori Scouts</h2>
-            <div id="scoutsList" class="scouts-list">
-                <p class="empty-state">No active scouts. Create an agent with monitoring intent to deploy scouts.</p>
-            </div>
+    <!-- Agent Detail Modal -->
+    <div id="agentModal" class="modal" style="display: none;">
+        <div class="modal-content agent-modal">
+            <button class="modal-close" onclick="closeAgentModal()">&times;</button>
+            <div id="agentModalContent"></div>
         </div>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>NGenesis v1.0 | Powered by AI</p>
-        </footer>
     </div>
 
     <script src="/js/app.js"></script>

@@ -16,7 +16,6 @@ export interface FabricateDataResponse {
 
 /**
  * Tonic Fabricate Integration - Generates synthetic test data
- * Prize Category: Most Innovative Use of Tonic Fabricate ($1,000)
  */
 export class TonicFabricateGenerator {
   private apiKey: string;

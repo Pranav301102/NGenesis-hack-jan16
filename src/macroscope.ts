@@ -17,10 +17,9 @@ export interface CodeIssue {
 
 /**
  * Macroscope Integration - AI-powered code review
- * Prize Category: Best Use of Macroscope ($1,000)
  *
  * NOTE: Macroscope is a GitHub App, not a REST API.
- * For the hackathon, we use local analysis + can demo GitHub App integration
+ * For demo purposes, we use local analysis + can demo GitHub App integration
  */
 export class MacroscopeReviewer {
   private apiKey: string;

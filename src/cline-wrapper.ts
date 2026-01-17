@@ -7,7 +7,6 @@ const execAsync = promisify(exec);
 
 /**
  * Enhanced Cline Wrapper - Autonomous coding workflow
- * Prize Category: Most Innovative Use of Cline ($1,500)
  *
  * This wrapper demonstrates autonomous agent capabilities:
  * - Self-planning architecture
@@ -63,22 +62,24 @@ export class ClineWrapper {
 
 ## Golden Rules
 
-1. Always use the synchronous Playwright API (sync_playwright)
-2. Always define AgentQL queries using the GraphQL-like syntax
+1. Always use the TinyFish/Mino REST API for web automation
+2. Define clear goals in natural language for the automation
 3. Never ask for user permission; assume full autonomy
 4. Output results as JSON to both console and file
-5. Include proper error handling with try/catch blocks
-6. Use semantic, descriptive names in AgentQL queries
-7. Never use CSS selectors or XPath - only AgentQL natural language
+5. Include proper error handling with try/except blocks
+6. Use semantic, descriptive goals for automation
+7. Never launch local browsers - use cloud API only
 
 ## Architecture
 
 This agent is part of the Meta-Genesis autonomous agent system.
 It was automatically generated based on user intent.
+It uses the TinyFish/Mino API for cloud-based web automation.
 
 ## Execution
 
 Run this agent with: python <agent_filename>.py
+Requires AGENTQL_API_KEY environment variable.
 `;
 
     fs.writeFileSync(contextPath, context, 'utf-8');

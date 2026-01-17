@@ -13,17 +13,16 @@ import {
 } from './types';
 
 /**
- * Enhanced Meta-Genesis Orchestrator
- * Integrates ALL prize-winning technologies for maximum impact
+ * NGenesis Orchestrator
+ * Integrates multiple AI tools for agent creation
  *
- * Prize Categories:
- * 1. Yutori API - $3,500 (monitoring)
- * 2. TinyFish/AgentQL - $2,250 (self-healing selectors)
- * 3. Freepik - $1,850 (visual design)
- * 4. Cline - $1,500 (autonomous coding)
- * 5. Tonic Fabricate - $1,000 (test data)
- * 6. Retool - $1,000 (dashboard)
- * 7. Macroscope - $1,000 (code review)
+ * Tools:
+ * - Gemini 2.5 (AI reasoning)
+ * - Web Scraping (TinyFish/Mino)
+ * - Image Generation (Freepik)
+ * - Continuous Monitoring (Yutori)
+ * - Test Data (Fabricate)
+ * - Code Review (Macroscope)
  */
 export class MetaGenesisOrchestratorEnhanced {
   private gemini: GeminiOrchestrator;
@@ -48,33 +47,38 @@ export class MetaGenesisOrchestratorEnhanced {
     this.cline = new ClineWrapper();
     this.activeGenerations = new Map();
 
-    // Optional prize integrations
+    // Optional integrations
     if (yutoriApiKey) {
       this.yutori = new YutoriMonitor(yutoriApiKey, webhookUrl);
-      console.log('✓ Yutori monitoring enabled ($3,500 prize track)');
+      console.log('✓ Continuous monitoring enabled');
     }
 
     if (fabricateApiKey) {
       this.fabricate = new TonicFabricateGenerator(fabricateApiKey);
-      console.log('✓ Tonic Fabricate enabled ($1,000 prize track)');
+      console.log('✓ Test data generation enabled');
     }
 
     // Macroscope is always available (uses local analysis since it's a GitHub App)
     this.macroscope = new MacroscopeReviewer(macroscopeApiKey);
-    console.log('✓ Macroscope code review enabled ($1,000 prize track)');
+    console.log('✓ Code review enabled');
   }
 
   async createAgent(request: AgentRequest): Promise<string> {
     const agentId = uuidv4();
     const personality = request.personality || 'professional';
 
-    // Initialize status
+    // Initialize status with context
     const status: AgentGenerationStatus = {
       agent_id: agentId,
       status: 'initializing',
       timeline: [],
       test_data_generated: false,
-      monitoring_active: false
+      monitoring_active: false,
+      context: {
+        target_url: request.target_url,
+        user_intent: request.user_intent,
+        personality
+      }
     };
 
     this.activeGenerations.set(agentId, status);
@@ -262,27 +266,40 @@ export class MetaGenesisOrchestratorEnhanced {
         }
       }
 
-      // STEP 8: Generate Icon (Freepik)
+      // STEP 8: Generate Icon (Freepik) - Only if image output is requested
       let iconUrl = '';
-      try {
-        this.updateStatus(agentId, 'deploying', 'Freepik: Generating Branded Icon');
-        iconUrl = await this.freepik.generateAgentIcon(manifest.icon_prompt);
+      const needsImage = request.output_format === 'image' || request.output_format === 'both';
+      
+      if (needsImage) {
+        try {
+          this.updateStatus(agentId, 'deploying', 'Freepik: Generating Branded Icon');
+          iconUrl = await this.freepik.generateAgentIcon(manifest.icon_prompt);
 
+          this.addTimelineEvent(
+            agentId,
+            'Freepik: Icon Generated',
+            'completed',
+            'Custom 4K branded icon created'
+          );
+        } catch (error: any) {
+          console.warn('[Orchestrator] Freepik icon generation failed, using placeholder:', error.message);
+          iconUrl = 'https://via.placeholder.com/512/4285f4/ffffff?text=Agent';
+
+          this.addTimelineEvent(
+            agentId,
+            'Freepik: Icon Generation Skipped',
+            'failed',
+            'Invalid API key or quota exceeded. Using placeholder icon.'
+          );
+        }
+      } else {
+        // Text-only output, skip image generation
+        iconUrl = 'https://via.placeholder.com/512/6366f1/ffffff?text=Text';
         this.addTimelineEvent(
           agentId,
-          'Freepik: Icon Generated',
+          'Freepik: Skipped (Text-only output)',
           'completed',
-          'Custom 4K branded icon created'
-        );
-      } catch (error: any) {
-        console.warn('[Orchestrator] Freepik icon generation failed, using placeholder:', error.message);
-        iconUrl = 'https://via.placeholder.com/512/4285f4/ffffff?text=Agent';
-
-        this.addTimelineEvent(
-          agentId,
-          'Freepik: Icon Generation Skipped',
-          'failed',
-          'Invalid API key or quota exceeded. Using placeholder icon.'
+          'Image generation not required for text output'
         );
       }
 
